@@ -1,4 +1,4 @@
-                # 🛡 AmneziaWG Config Analyzer
+#                    🛡 AmneziaWG Config Analyzer
 
 <p align="center">
   <img src="pic1.png" width="900">
