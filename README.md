@@ -1,4 +1,4 @@
-# 🛡 AmneziaWG Config Analyzer -
+# 🛡 AmneziaWG Config Analyzer
 Лёгкий инструмент для анализа конфигураций AmneziaWG / WireGuard.
 Проверяет параметры обфускации, устойчивость к DPI и общую безопасность VPN-конфигурации.
 
