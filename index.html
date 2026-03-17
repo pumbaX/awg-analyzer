@@ -457,4 +457,475 @@ function runChecks(iface, peer, version) {
   const hHaveRanges = allHraw.some(h => h.isRange);
   const allHvals = allHraw.map(h => h.val);
   const defaultH = !hHaveRanges && allHvals[0]===1 && allHvals[1]===2 && allHvals[2]===3 && allHvals[3]===4;
-  co
+  const uniqueH = hasAllH && new Set(allHvals).size === 4;
+  const hDisplayVal = hasAllH ? allHraw.map(h => h.isRange ? h.raw : h.val).join(' / ') : '(не заданы)';
+
+  let hStatus, hPts, hDetail;
+  if (!hasAllH) {
+    hStatus='warn'; hPts=0;
+    hDetail='H1-H4 не заданы или неполные — WireGuard сигнатура хандшейка не скрыта';
+  } else if (defaultH) {
+    hStatus='fail'; hPts=0;
+    hDetail='H1=1 H2=2 H3=3 H4=4 — ДЕФОЛТНЫЕ значения WireGuard! Хандшейк легко идентифицируется DPI.';
+  } else if (!uniqueH) {
+    hStatus='fail'; hPts=0;
+    hDetail='H1-H4 содержат повторяющиеся значения — конфигурация невалидна (все заголовки должны быть уникальны)';
+  } else if (hHaveRanges) {
+    hStatus='pass'; hPts=12;
+    hDetail='H1-H4 заданы диапазонами — AWG 2.0 режим, каждое соединение использует случайное значение из диапазона ✓';
+  } else {
+    hStatus='pass'; hPts=10;
+    hDetail='H1-H4 уникальны — сигнатура хандшейка скрыта ✓';
+  }
+
+  push('Magic Headers (H1-H4)', 'H1-H4', hStatus, hDisplayVal, hDetail, hPts, 12);
+
+  // Проверка ширины диапазонов H1-H4 (AWG 2.0)
+  if (hHaveRanges) {
+    const ranges = allHraw.map(h=>h.raw).filter(v=>v && v.includes('-'));
+    const smallRanges = ranges.filter(r=>{
+      const p=r.split('-'); return (parseInt(p[1])-parseInt(p[0]))<1000;
+    });
+    if (smallRanges.length){
+      push('Magic Headers (H1-H4)','Диапазон H слишком мал','warn',
+        smallRanges.join(', '),
+        'Маленький диапазон H уменьшает энтропию. Рекомендуется диапазон ≥1000 значений.',0,0);
+    }
+  }
+
+
+  // Проверка диапазона каждого H
+  if (hasAllH && uniqueH && !defaultH && !hHaveRanges) {
+    const tooSmall = allHvals.filter(h => h < 5);
+    if (tooSmall.length) {
+      push('Magic Headers (H1-H4)', 'H значения < 5', 'warn', tooSmall.join(', '),
+        'Значения H < 5 потенциально пересекаются с типами WireGuard (1-4). Рекомендуется H ≥ 5', 0, 0);
+    }
+  }
+
+  // ── CPS / I1-I5 ──────────────────────────────────────────
+  const hasI1 = !!I1;
+  push('CPS Мимикрий (I1-I5)', 'I1 — Protocol Signature', hasI1?'pass':'info',
+    hasI1?I1.slice(0,40)+(I1.length>40?'…':''):'(не задан)',
+    hasI1?`CPS активен — трафик имитирует реальный протокол. Параметр I1: ${I1.length} байт описания`:
+           'I1 не задан — AWG 2.0 мимикрий отключён. Для максимальной защиты добавьте I1 с QUIC или DNS handshake.',
+    hasI1?15:0, 15);
+
+  if (hasI1) {
+    const i1lower = I1.toLowerCase();
+    
+    // Advanced protocol detector for I1
+    const hex = i1lower.replace(/[^0-9a-f]/g,'');
+
+    const isQuic =
+        hex.startsWith('c0') ||
+        hex.includes('c0000001') ||
+        hex.includes('c3000000');
+
+    const isTls =
+        hex.startsWith('1603') ||
+        hex.includes('160301') ||
+        hex.includes('160303');
+
+    const isDns =
+        hex.includes('00010001') ||
+        hex.includes('000001000001') ||
+        hex.endsWith('00010001');
+
+    const isHttp =
+        hex.includes('474554') ||  // GET
+        hex.includes('504f5354') || // POST
+        hex.includes('48545450');   // HTTP
+
+    const isStun =
+        hex.startsWith('0001') && hex.includes('2112a442');
+
+    const isDtls =
+        hex.startsWith('16feff');
+
+    
+    let protoExplain = '';
+    if (isQuic) protoExplain = 'QUIC handshake — трафик похож на Google/YouTube HTTP3';
+    else if (isTls) protoExplain = 'TLS ClientHello — выглядит как обычный HTTPS';
+    else if (isDns) protoExplain = 'DNS query — имитация DNS запроса';
+    else if (isHttp) protoExplain = 'HTTP request — маскировка под веб‑запрос';
+    else if (isStun) protoExplain = 'STUN — используется WebRTC';
+    else if (isDtls) protoExplain = 'DTLS handshake';
+    else protoExplain = 'Неизвестная сигнатура';
+
+    const protoName =
+        isQuic ? 'QUIC Initial' :
+        isTls  ? 'TLS ClientHello' :
+        isDns  ? 'DNS Query' :
+        isHttp ? 'HTTP Request' :
+        isStun ? 'STUN' :
+        isDtls ? 'DTLS' :
+        'Custom';
+
+    const iCount = [I1,I2,I3,getStr(iface,'i4'),getStr(iface,'i5')].filter(i=>i).length;
+
+    push('CPS Мимикрий (I1-I5)', 'Протокол имитации', 'pass', protoName,
+      isQuic?'QUIC Initial handshake — идеальный выбор. QUIC — популярный протокол (YouTube, Google). DPI трудно отличить.':
+      isTls?'TLS ClientHello — отлично маскируется под HTTPS трафик':
+      isDns?'DNS Query имитация — трудно блокировать (порт 53 обычно открыт)':
+           'Кастомный протокол. Убедитесь что hex-последовательность реалистична.',
+      isQuic?5:isDns?4:3, 5);
+
+    if (iCount > 1) {
+      push('CPS Мимикрий (I1-I5)', `Цепочка I1-I${iCount}`, 'pass', `${iCount} пакетов`,
+        `Задано ${iCount} сигнатурных пакетов — высокая энтропия сессии, счётчики и временные метки варьируются`, 3, 3);
+    }
+  }
+
+  // ── ENDPOINT & ROUTING ───────────────────────────────────
+  const endpoint = getStr(peer, 'endpoint');
+  if (endpoint) {
+    const ep = endpoint.split(':');
+    const epPort = parseInt(ep[ep.length-1]);
+    const epHost = ep.slice(0,-1).join(':').replace(/^\[|\]$/g,'');
+    const portOk = epPort === 443 || epPort === 80 || (epPort >= 1024 && epPort <= 65535);
+    const portStd = epPort === 443;
+    const portDns = epPort === 53;
+    const portUdp = epPort === 51820 || epPort === 51821;
+
+    push('Сервер', 'Endpoint порт', portUdp?'warn':epPort<1024?'warn':'pass',
+      String(epPort),
+      portUdp?`${epPort} — стандартный WireGuard порт, легко идентифицируется DPI. Смените на любой выше 1024`:
+      epPort===53?'53 (DNS) — почти не блокируется, но может перехватываться DNS-прокси':
+      epPort<1024?`${epPort} — системный порт (<1024), могут быть проблемы`:
+              `${epPort} — нормально. Для AWG порт не критичен`,
+      portUdp?2:epPort<1024?2:5, 5);
+
+    const isIPv4 = /^\d{1,3}(\.\d{1,3}){3}$/.test(epHost);
+    const isIPv6 = epHost.includes(':');
+    const isDomain = !isIPv4 && !isIPv6 && epHost.includes('.');
+    push('Сервер', 'Endpoint адрес', isDomain?'pass':(isIPv4||isIPv6)?'warn':'fail',
+      epHost||'?',
+      isDomain?'Домен — удобнее при смене IP сервера':
+      isIPv4?'IPv4 адрес — риск блокировки по IP':
+      isIPv6?'IPv6 адрес — хорошо обходит некоторые блокировки по IPv4':
+             'Неверный формат endpoint',
+      isDomain?4:(isIPv4||isIPv6)?2:0, 4);
+  }
+
+  // AllowedIPs — DNS leak
+  const allowedIPs = getStr(peer, 'allowedips');
+  const fullTunnel = allowedIPs.includes('0.0.0.0/0');
+  const hasIPv6Tunnel = allowedIPs.includes('::/0');
+  const splitTunnel = allowedIPs && !fullTunnel;
+
+  push('Маршрутизация', 'AllowedIPs', fullTunnel&&hasIPv6Tunnel?'pass':fullTunnel?'warn':splitTunnel?'info':'fail',
+    allowedIPs||'(не задан)',
+    fullTunnel&&hasIPv6Tunnel?'0.0.0.0/0 + ::/0 — весь трафик (IPv4+IPv6) через VPN, минимальный DNS leak риск':
+    fullTunnel?'0.0.0.0/0 без ::/0 — IPv4 через VPN, IPv6 может утечь (DNS/WebRTC leak риск)':
+    splitTunnel?'Split-tunneling — часть трафика мимо VPN (намеренно или нет)':
+                'AllowedIPs не задан',
+    fullTunnel&&hasIPv6Tunnel?6:fullTunnel?3:splitTunnel?2:0, 6);
+
+  // DNS leak check
+  const dns = getStr(iface, 'dns');
+  const dnsOk = !!dns;
+  const dnsPrivate = dns.includes('10.') || dns.includes('192.168.') || dns.includes('172.');
+  const dnsPublicGood = ['1.1.1.1','8.8.8.8','9.9.9.9','208.67.222.222','94.140.14.14'].some(d=>dns.includes(d));
+  push('Маршрутизация', 'DNS', dnsOk?(dnsPrivate?'pass':dnsPublicGood?'warn':'warn'):'fail',
+    dns||'(не задан)',
+    !dnsOk?'DNS не задан — запросы идут мимо VPN, полный DNS leak':
+    dnsPrivate?`DNS сервера VPN (${dns}) — запросы через туннель, нет утечки`:
+    dnsPublicGood?`${dns} — публичный DNS через туннель, работает, но предпочтительнее DNS сервера VPN`:
+                  `${dns} — нестандартный DNS, убедитесь что запросы идут через туннель`,
+    dnsOk?(dnsPrivate?6:dnsPublicGood?4:3):0, 6);
+
+  // ── MTU ─────────────────────────────────────────────────
+  const mtu = getInt(iface, 'mtu', null);
+  if (mtu !== null) {
+    const mtuOk = mtu >= 1200 && mtu <= 1420;
+    const mtuJmax = getInt(iface,'jmax',null);
+    const mtuConflict = mtuJmax !== null && mtuJmax >= mtu;
+    push('Сеть', 'MTU', mtuConflict?'fail':mtuOk?'pass':'warn',
+      String(mtu),
+      mtuConflict?`MTU=${mtu} но Jmax=${mtuJmax} ≥ MTU — система будет фрагментировать junk-пакеты, это выглядит подозрительно!`:
+      mtuOk?`MTU=${mtu} — корректное значение для AWG`:
+            `MTU=${mtu} — вне рекомендуемого диапазона 1200-1420`,
+      mtuConflict?0:mtuOk?4:2, 4);
+  }
+
+  // KeepaliveCheck
+  const ka = getInt(peer, 'persistentkeepalive', null);
+  if (ka !== null) {
+    const kaOk = ka >= 15 && ka <= 60;
+    push('Сеть', 'PersistentKeepalive', ka===0?'info':kaOk?'pass':'warn',
+      String(ka),
+      ka===0?'Отключён — соединение может разорваться за NAT. Рекомендуется 20-35 секунд для стабильной работы':
+      kaOk?`${ka}s — хорошее значение, поддерживает NAT-соединение`:
+      ka<15?`${ka}s — слишком часто, создаёт лишний трафик (рекомендуется 15-60)`:
+            `${ka}s — редко, NAT может закрыть соединение (рекомендуется 15-60)`,
+      ka===0?3:kaOk?3:1, 3);
+  }
+
+  return R;
+}
+
+// ═══════════════════════════════════════════════════════════
+//  SCORING
+// ═══════════════════════════════════════════════════════════
+function calcScores(checks, iface, version) {
+  const tp = checks.reduce((a,c)=>a+c.pts,0);
+  const mp = checks.reduce((a,c)=>a+c.max,0);
+  const total = Math.round((tp/mp)*100);
+
+  // DPI score
+  let dpi = 95;
+  if (version.ver.includes('2.0')) dpi -= 55;
+  else if (version.ver.includes('1.5')) dpi -= 40;
+  else if (version.ver.includes('1.0')) dpi -= 25;
+  const Jc = getInt(iface,'jc',0);
+  if (Jc>=3) dpi -= 10;
+  const H1=getInt(iface,'h1',1), H2=getInt(iface,'h2',2), H3=getInt(iface,'h3',3), H4=getInt(iface,'h4',4);
+  if (!(H1===1&&H2===2&&H3===3&&H4===4)) dpi -= 5;
+  dpi = Math.max(3, Math.min(92, dpi));
+
+  // Stealth
+  const stealth = Math.round(100 - dpi * 0.75);
+
+  return { total, dpi, stealth };
+}
+
+
+function buildFixes(checks, iface, version) {
+  const fixes = [];
+
+  const Jc   = getInt(iface,'jc',null);
+  const Jmin = getInt(iface,'jmin',null);
+  const Jmax = getInt(iface,'jmax',null);
+  const S1   = getInt(iface,'s1',null);
+  const S2   = getInt(iface,'s2',null);
+  const S3   = getInt(iface,'s3',null);
+  const S4   = getInt(iface,'s4',null);
+
+  const H1=getInt(iface,'h1',null);
+  const H2=getInt(iface,'h2',null);
+  const H3=getInt(iface,'h3',null);
+  const H4=getInt(iface,'h4',null);
+
+  const dns = getStr(iface,'dns');
+  const endpoint = getStr(checks.find(c=>c.title==='Endpoint порт') ? {} : iface,'endpoint') || getStr(iface,'endpoint');
+
+  // DNS
+  if (!dns)
+    fixes.push('Добавьте DNS в [Interface] чтобы избежать DNS leak (например DNS = 1.1.1.1 или DNS сервера VPN).');
+
+  // IPv6 leak
+  const allowed = getStr(iface,'allowedips') || checks.find(c=>c.title==='AllowedIPs')?.value || '';
+  if (!allowed.includes('::/0'))
+    fixes.push('Добавьте ::/0 в AllowedIPs чтобы закрыть IPv6 DNS/WebRTC leak.');
+
+  // Junk packets
+  if (Jc !== null && Jc < 3)
+    fixes.push('Увеличьте Jc до диапазона 3–10 — больше junk‑пакетов повышает устойчивость к DPI.');
+
+  if (Jmin !== null && Jmax !== null && (Jmax - Jmin) < 30)
+    fixes.push('Увеличьте диапазон Jmin/Jmax (разница ≥30) чтобы размеры junk‑пакетов были менее предсказуемы.');
+
+  // Handshake
+  if (S1 !== null && S2 !== null && (S1 + 56 === S2))
+    fixes.push('Измените S1 или S2 — правило AWG: S1 + 56 ≠ S2.');
+
+  // AWG version suggestions
+  if (version.ver === 'WireGuard')
+    fixes.push('Используйте AmneziaWG вместо чистого WireGuard — это добавит обфускацию и защиту от DPI.');
+
+  if (version.ver === 'AWG 1.5')
+    fixes.push('Для максимальной обфускации используйте AWG 2.0 (добавьте параметры S3 и S4).');
+
+  // Magic headers
+  if (H1===1 && H2===2 && H3===3 && H4===4)
+    fixes.push('Измените H1‑H4 — значения 1‑4 являются сигнатурой стандартного WireGuard.');
+
+  // Endpoint domain suggestion
+  const epCheck = checks.find(c=>c.title==='Endpoint адрес');
+  if (epCheck && epCheck.status === 'warn')
+    fixes.push('Используйте доменное имя вместо IP в Endpoint — это усложняет блокировку по IP и позволяет менять сервер без обновления конфигов.');
+
+  // CPS
+  if (!iface.i1)
+    fixes.push('Добавьте CPS сигнатуру (I1) чтобы трафик имитировал реальный протокол (DNS, TLS или QUIC).');
+
+  return fixes;
+}
+
+
+// ═══════════════════════════════════════════════════════════
+//  VERDICT
+// ═══════════════════════════════════════════════════════════
+function getVerdict(s) {
+  if(s>=88)return{l:'🛡 Максимальная защита',c:'#a855f7',bg:'#2e1a4e22',t:'AWG 2.0 с CPS мимикрием. Трафик неотличим от реального протокола. Высочайшая устойчивость к DPI и глубокому анализу.'};
+  if(s>=70)return{l:'✅ Хорошая защита',c:'#4ade80',bg:'#14532d11',t:'Надёжная конфигурация AWG. Есть параметры для улучшения — проверьте рекомендации.'};
+  if(s>=50)return{l:'⚠️ Средняя защита',c:'#f59e0b',bg:'#78350f11',t:'Базовая обфускация. Продвинутые DPI-системы могут идентифицировать трафик как AWG/WireGuard.'};
+  if(s>=30)return{l:'🔶 Слабая защита',c:'#f97316',bg:'#431a0311',t:'Минимальная обфускация. Трафик легко идентифицируется как WireGuard.'};
+  return     {l:'🔴 Стандартный WireGuard',c:'#ef4444',bg:'#450a0a22',t:'Нет обфускации. DPI немедленно идентифицирует и может заблокировать трафик.'};
+}
+
+function dpiLabel(d){
+  if(d<=20)return{t:'LOW',c:'#22c55e'};
+  if(d<=45)return{t:'MEDIUM',c:'#f59e0b'};
+  return{t:'HIGH',c:'#ef4444'};
+}
+
+function esc(s){return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');}
+const icons={pass:'✓',warn:'!',fail:'✗',info:'i'};
+
+function renderMini(label,val,color,suffix=''){
+  return`<div class="mini-card"><div class="mini-label">${label}</div><div class="mini-val" style="color:${color}">${esc(String(val))}${suffix}</div></div>`;
+}
+
+// ═══════════════════════════════════════════════════════════
+//  MAIN
+// ═══════════════════════════════════════════════════════════
+function analyze() {
+  const raw = document.getElementById('configInput').value.trim();
+  const errEl      = document.getElementById('errorMsg');
+  const scoreEl    = document.getElementById('scoreSection');
+  const parsedEl   = document.getElementById('parsedParams');
+  const checksEl   = document.getElementById('checksOutput');
+  const autofixEl  = document.getElementById('autofixBox');
+  const fixList    = document.getElementById('autofixList');
+  const miniEl     = document.getElementById('miniScores');
+  const verBanner  = document.getElementById('versionBanner');
+  const verBadge   = document.getElementById('verBadge');
+  const verDesc    = document.getElementById('verDesc');
+
+  errEl.style.display='none'; scoreEl.style.display='none';
+  parsedEl.style.display='none'; checksEl.innerHTML='';
+  autofixEl.style.display='none'; fixList.innerHTML=''; miniEl.innerHTML='';
+  verBanner.style.display='none';
+
+  if(!raw){errEl.textContent='Вставьте содержимое .conf файла AmneziaWG / WireGuard';errEl.style.display='block';return;}
+
+  let parsed;
+  try { parsed = parseAWG(raw); }
+  catch(e) { errEl.textContent=e.message; errEl.style.display='block'; return; }
+
+  const { iface, peer } = parsed;
+  const version = detectVersion(iface);
+  const checks  = runChecks(iface, peer, version);
+  const scores  = calcScores(checks, iface, version);
+  const fixes   = buildFixes(checks, iface, version);
+  
+  // DPI camouflage heuristic
+  const i1 = (iface.i1||'').toLowerCase();
+  let camouflage = 'LOW';
+  if(i1.includes('quic')||i1.includes('0xc0')) camouflage='HIGH';
+  else if(i1.includes('1603')||i1.includes('tls')) camouflage='HIGH';
+  else if(i1.includes('dns')||i1.includes('0001')) camouflage='MEDIUM';
+
+  const verdict = getVerdict(scores.total);
+  const dpiL    = dpiLabel(scores.dpi);
+
+  // Version banner
+  verBanner.style.display='flex';
+  verBadge.textContent=version.ver;
+  verBadge.className='ver-badge '+version.cls;
+  verDesc.textContent=version.desc;
+
+  // Score ring
+  scoreEl.style.display='block';
+  const rf=document.getElementById('ringFill');
+  document.getElementById('ringScore').textContent=scores.total;
+  document.getElementById('ringSub').textContent=version.ver;
+  rf.setAttribute('stroke-dasharray',`${(scores.total/100)*CIRC} ${CIRC}`);
+  rf.setAttribute('stroke',verdict.c);
+  const b=document.getElementById('verdictBadge');
+  b.textContent=verdict.l; b.style.cssText=`background:${verdict.bg};color:${verdict.c};border:1px solid ${verdict.c}44`;
+  document.getElementById('verdictText').textContent=verdict.t;
+
+  // Mini
+  miniEl.innerHTML=
+    renderMini('AWG Version',version.ver,'#a78bfa')+
+    renderMini('DPI Risk',dpiL.t,dpiL.c)+
+    renderMini('Stealth Score',scores.stealth,'#818cf8','%')+
+    renderMini('Security',scores.total,'#e2e8f0','%')+
+    renderMini('Camouflage',camouflage,'#60a5fa');
+
+  // Fixes
+  if(fixes.length){
+    autofixEl.style.display='block';
+    fixList.innerHTML=fixes.map(f=>`<div class="fix-item">${esc(f)}</div>`).join('');
+  }
+
+  // Parsed params
+  parsedEl.style.display='block';
+  const prows=[
+    ['privatekey', iface.privatekey?iface.privatekey.slice(0,16)+'…':'—'],
+    ['address',    iface.address||'—'],
+    ['dns',        iface.dns||'—'],
+    ['mtu',        iface.mtu||'—'],
+    ['jc/jmin/jmax', [iface.jc,iface.jmin,iface.jmax].map(v=>v??'—').join(' / ')],
+    ['s1/s2',      [iface.s1,iface.s2].map(v=>v??'—').join(' / ')],
+    ['s3/s4',      iface.s3||iface.s4?[iface.s3,iface.s4].map(v=>v??'—').join(' / '):'—'],
+    ['h1/h2/h3/h4',[iface.h1,iface.h2,iface.h3,iface.h4].map(v=>v??'—').join(' / ')],
+    ['i1',         iface.i1?iface.i1.slice(0,40)+(iface.i1.length>40?'…':''):'—'],
+    ['endpoint',   peer.endpoint||'—'],
+    ['publickey',  peer.publickey?peer.publickey.slice(0,16)+'…':'—'],
+    ['allowedips', peer.allowedips||'—'],
+    ['keepalive',  peer.persistentkeepalive||'—'],
+  ].filter(([,v])=>v&&v!=='—');
+  parsedEl.innerHTML=prows.map(([k,v])=>`<span>${k.padEnd(14)}</span>= ${esc(v)}`).join('\n');
+
+  // Checks
+  const cats=[...new Set(checks.map(c=>c.cat))];
+  cats.forEach(cat=>{
+    checksEl.innerHTML+=`<div class="section-title">${cat}</div><div class="checks-grid">`;
+    checks.filter(c=>c.cat===cat&&c.max>=0).forEach(c=>{
+      checksEl.innerHTML+=`
+        <div class="check-item ${c.status}">
+          <div class="check-icon">${icons[c.status]||'i'}</div>
+          <div class="check-body">
+            <div class="check-title">${c.title}</div>
+            <div class="check-value">${esc(c.value)}</div>
+            <div class="check-detail">${c.detail}</div>
+          </div>
+          <div class="check-weight">${c.pts}/${c.max}</div>
+        </div>`;
+    });
+    checksEl.innerHTML+='</div>';
+  });
+}
+
+function loadFile(e){
+  const file=e.target.files[0]; if(!file) return;
+  const r=new FileReader();
+  r.onload=ev=>{document.getElementById('configInput').value=ev.target.result.trim();analyze();};
+  r.readAsText(file);
+  e.target.value='';
+}
+function clearAll(){
+  document.getElementById('configInput').value='';
+  ['errorMsg','scoreSection','parsedParams','autofixBox','versionBanner'].forEach(id=>{
+    document.getElementById(id).style.display='none';
+  });
+  document.getElementById('checksOutput').innerHTML='';
+}
+
+// Drag & drop
+const dz=document.getElementById('dropZone');
+dz.addEventListener('dragover',e=>{e.preventDefault();dz.classList.add('dragover');});
+dz.addEventListener('dragleave',()=>dz.classList.remove('dragover'));
+dz.addEventListener('drop',e=>{
+  e.preventDefault(); dz.classList.remove('dragover');
+  const file=e.dataTransfer.files[0]; if(!file) return;
+  const r=new FileReader();
+  r.onload=ev=>{document.getElementById('configInput').value=ev.target.result.trim();analyze();};
+  r.readAsText(file);
+});
+
+document.addEventListener('keydown',e=>{if(e.ctrlKey&&e.key==='Enter')analyze();});
+
+// Theme toggle
+const themeBtn = document.getElementById('themeToggle');
+themeBtn.addEventListener('click',()=>{
+  document.body.classList.toggle('light');
+});
+
+</script>
+</body>
+</html>
