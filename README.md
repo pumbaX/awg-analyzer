@@ -85,3 +85,5 @@ Ctrl + Enter → быстрый анализ
 License
 
 MIT
+
+## 💰 Поддержка проекта:USDT TRC20:TN2rQAsGNHQr8wnneKRD14UMX629D2Ca5q TON:UQCdQtJO4CF0Lyeb93X2zdeWeAcDJ-ieBC3AaL7LIqWfMBg
