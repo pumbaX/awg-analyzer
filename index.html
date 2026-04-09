@@ -7,16 +7,17 @@
 <style>
 *{margin:0;padding:0;box-sizing:border-box;}
 body{background:#080f1e;color:#e2e8f0;font-family:'Segoe UI',system-ui,sans-serif;min-height:100vh;padding:24px 16px;}
-.container{max-width:860px;margin:0 auto;}
+.container{max-width:920px;margin:0 auto;}
 
 header{text-align:center;margin-bottom:28px;}
-header h1{font-size:1.7rem;font-weight:800;background:linear-gradient(135deg,#8b5cf6,#06b6d4);-webkit-background-clip:text;-webkit-text-fill-color:transparent;margin-bottom:4px;}
+header h1{font-size:1.75rem;font-weight:800;background:linear-gradient(135deg,#8b5cf6,#06b6d4);-webkit-background-clip:text;-webkit-text-fill-color:transparent;margin-bottom:4px;}
 header p{color:#475569;font-size:.85rem;}
+header .subline{color:#64748b;font-size:.75rem;margin-top:2px;}
 
 .drop-zone{background:#0d1526;border:2px dashed #1e3a5f;border-radius:12px;padding:16px;margin-bottom:8px;transition:border-color .2s,background .2s;cursor:pointer;}
 .drop-zone.dragover{border-color:#8b5cf6;background:#111827;}
 .drop-zone label{display:block;font-size:.75rem;color:#475569;text-transform:uppercase;letter-spacing:.08em;margin-bottom:8px;}
-textarea{width:100%;background:transparent;border:none;color:#94a3b8;font-family:'Courier New',monospace;font-size:.8rem;padding:0;resize:vertical;min-height:120px;outline:none;}
+textarea{width:100%;background:transparent;border:none;color:#94a3b8;font-family:'Courier New',monospace;font-size:.8rem;padding:0;resize:vertical;min-height:140px;outline:none;}
 textarea:focus{color:#e2e8f0;}
 textarea::placeholder{color:#1e3a5f;}
 
@@ -28,13 +29,21 @@ textarea::placeholder{color:#1e3a5f;}
 .btn-clear{background:#1e293b;color:#64748b;}
 
 /* Version badge */
-.version-banner{display:none;background:#0d1526;border:1px solid #312e81;border-radius:10px;padding:14px 20px;margin-bottom:16px;display:none;align-items:center;gap:14px;flex-wrap:wrap;}
+.version-banner{display:none;background:#0d1526;border:1px solid #312e81;border-radius:10px;padding:14px 20px;margin-bottom:16px;align-items:center;gap:14px;flex-wrap:wrap;}
 .ver-badge{padding:6px 18px;border-radius:999px;font-weight:800;font-size:1rem;flex-shrink:0;}
 .ver-wg{background:#1e293b;color:#94a3b8;border:1px solid #334155;}
 .ver-10{background:#1e1b4b;color:#a5b4fc;border:1px solid #4338ca;}
 .ver-15{background:#1a2e1a;color:#86efac;border:1px solid #16a34a;}
 .ver-20{background:#2e1a4e;color:#d8b4fe;border:1px solid #7c3aed;}
 .ver-desc{color:#94a3b8;font-size:.85rem;line-height:1.5;flex:1;min-width:200px;}
+.ver-level{display:inline-block;margin-left:8px;padding:3px 10px;border-radius:6px;font-size:.72rem;font-weight:700;background:#312e81;color:#c4b5fd;}
+
+/* Summary box — что это за конфиг */
+.summary{display:none;background:linear-gradient(135deg,#0d1526 0%,#0f0d1e 100%);border:1px solid #1e1b4b;border-radius:12px;padding:18px 20px;margin-bottom:16px;}
+.summary-title{font-size:.75rem;text-transform:uppercase;letter-spacing:.1em;color:#8b5cf6;margin-bottom:10px;font-weight:700;}
+.summary-text{color:#cbd5e1;font-size:.88rem;line-height:1.6;}
+.summary-text strong{color:#a78bfa;}
+.summary-text .pill{display:inline-block;background:#1e1b4b;color:#c4b5fd;padding:1px 8px;border-radius:6px;font-family:monospace;font-size:.78rem;margin:0 2px;}
 
 /* Score area */
 .score-section{display:none;background:#0d1526;border:1px solid #1e293b;border-radius:12px;padding:24px;margin-bottom:16px;}
@@ -54,9 +63,23 @@ textarea::placeholder{color:#1e3a5f;}
 
 /* Auto-fix */
 .autofix{background:#080f08;border:1px solid #14532d;border-radius:10px;padding:14px 16px;margin-bottom:16px;display:none;}
-.autofix-title{font-size:.78rem;text-transform:uppercase;letter-spacing:.08em;color:#4ade80;margin-bottom:10px;}
-.fix-item{display:flex;align-items:flex-start;gap:8px;margin-bottom:6px;font-size:.82rem;color:#86efac;}
-.fix-item::before{content:'→';color:#4ade80;flex-shrink:0;}
+.autofix-title{font-size:.78rem;text-transform:uppercase;letter-spacing:.08em;color:#4ade80;margin-bottom:10px;font-weight:700;}
+.fix-item{display:flex;align-items:flex-start;gap:8px;margin-bottom:8px;font-size:.82rem;color:#86efac;line-height:1.5;}
+.fix-item::before{content:'→';color:#4ade80;flex-shrink:0;font-weight:700;}
+.fix-item .fix-code{background:#060e1e;color:#22d3ee;font-family:monospace;font-size:.76rem;padding:1px 6px;border-radius:3px;}
+.fix-severity{display:inline-block;padding:1px 7px;border-radius:4px;font-size:.65rem;font-weight:700;text-transform:uppercase;letter-spacing:.05em;margin-right:6px;}
+.fix-severity.crit{background:#450a0a;color:#fca5a5;}
+.fix-severity.high{background:#451a03;color:#fcd34d;}
+.fix-severity.med{background:#1e1b4b;color:#a5b4fc;}
+.fix-severity.low{background:#111827;color:#64748b;}
+
+/* Upgrade path — как усилить */
+.upgrade{display:none;background:#0a0f1e;border:1px solid #1e3a5f;border-radius:10px;padding:14px 16px;margin-bottom:16px;}
+.upgrade-title{font-size:.78rem;text-transform:uppercase;letter-spacing:.08em;color:#22d3ee;margin-bottom:10px;font-weight:700;}
+.upgrade-step{color:#94a3b8;font-size:.82rem;line-height:1.55;padding:8px 0;border-bottom:1px dashed #1a2740;}
+.upgrade-step:last-child{border-bottom:none;}
+.upgrade-step strong{color:#22d3ee;}
+.upgrade-step .cmd{display:block;background:#060e1e;color:#86efac;font-family:monospace;font-size:.75rem;padding:6px 10px;border-radius:5px;margin-top:6px;overflow-x:auto;white-space:pre;}
 
 /* Checks */
 .checks-grid{display:grid;gap:8px;}
@@ -70,11 +93,11 @@ textarea::placeholder{color:#1e3a5f;}
 .warn .check-icon{background:#451a03;color:#fbbf24;}
 .fail .check-icon{background:#450a0a;color:#f87171;}
 .info .check-icon{background:#2e1a4e;color:#c4b5fd;}
-.check-body{flex:1;}
+.check-body{flex:1;min-width:0;}
 .check-title{font-weight:600;font-size:.88rem;margin-bottom:2px;}
-.check-detail{color:#64748b;font-size:.79rem;line-height:1.4;}
+.check-detail{color:#64748b;font-size:.79rem;line-height:1.45;}
 .check-value{display:inline-block;background:#060e1e;color:#22d3ee;font-family:monospace;font-size:.76rem;padding:1px 7px;border-radius:3px;margin-top:3px;word-break:break-all;max-width:100%;}
-.check-weight{font-size:.7rem;color:#334155;align-self:center;flex-shrink:0;min-width:32px;text-align:right;}
+.check-weight{font-size:.7rem;color:#334155;align-self:center;flex-shrink:0;min-width:36px;text-align:right;}
 
 .section-title{font-size:.72rem;text-transform:uppercase;letter-spacing:.1em;color:#334155;margin:18px 0 8px;display:flex;align-items:center;gap:8px;}
 .section-title::after{content:'';flex:1;height:1px;background:#1a2740;}
@@ -85,96 +108,64 @@ textarea::placeholder{color:#1e3a5f;}
 .error-msg{background:#1a0808;border:1px solid #7f1d1d;border-radius:8px;padding:12px;color:#f87171;font-size:.85rem;display:none;margin-bottom:14px;}
 .hint{color:#1e293b;font-size:.75rem;margin-top:6px;text-align:center;}
 
-/* H-headers uniqueness visual */
-.h-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:6px;margin-top:6px;}
-.h-cell{background:#060e1e;border-radius:4px;padding:4px 8px;font-family:monospace;font-size:.73rem;text-align:center;}
-.h-cell.dup{background:#450a0a;color:#f87171;}
-.h-cell.ok{color:#a78bfa;}
-
 @media(max-width:520px){.score-top{flex-direction:column;align-items:flex-start;}.ring-svg{width:110px;height:110px;}}
 
 /* ===== Light Theme ===== */
-body.light{
-  background:#f3f6fb;
-  color:#0f172a;
-}
+body.light{background:#f3f6fb;color:#0f172a;}
 body.light .drop-zone,
 body.light .check-item,
 body.light .score-section,
-body.light .version-banner{
-  background:#ffffff;
-  border-color:#d1d9e6;
-}
-body.light textarea{
-  color:#0f172a;
-}
-body.light textarea::placeholder{
-  color:#94a3b8;
-}
-body.light .mini-card{
-  background:#ffffff;
-  border-color:#d1d9e6;
-}
-body.light .check-detail{
-  color:#475569;
-}
-body.light .parsed-params{
-  background:#ffffff;
-  border-color:#d1d9e6;
-}
-body.light .btn-clear{
-  background:#e2e8f0;
-  color:#0f172a;
-}
-body.light .section-title::after{
-  background:#cbd5e1;
-}
-
-
-/* Light theme ring visibility fix */
-body.light #ringScore{
-  fill:#0f172a !important;
-}
-
-body.light #ringSub{
-  fill:#475569 !important;
-}
-
-body.light .ring-svg text{
-  fill:#0f172a !important;
-}
-
+body.light .version-banner,
+body.light .summary,
+body.light .upgrade{background:#ffffff;border-color:#d1d9e6;}
+body.light .summary{background:linear-gradient(135deg,#fff 0%,#f8f4ff 100%);}
+body.light textarea{color:#0f172a;}
+body.light textarea::placeholder{color:#94a3b8;}
+body.light .mini-card{background:#ffffff;border-color:#d1d9e6;}
+body.light .check-detail{color:#475569;}
+body.light .parsed-params{background:#ffffff;border-color:#d1d9e6;color:#475569;}
+body.light .btn-clear{background:#e2e8f0;color:#0f172a;}
+body.light .section-title::after{background:#cbd5e1;}
+body.light #ringScore,body.light .ring-svg text{fill:#0f172a !important;}
+body.light #ringSub{fill:#475569 !important;}
+body.light .summary-text{color:#334155;}
+body.light .upgrade-step{color:#475569;border-color:#e2e8f0;}
+body.light .check-title{color:#0f172a;}
 </style>
 </head>
 <body>
 <div class="container">
   <header>
     <h1 id="themeToggle" style="cursor:pointer">🛡 AmneziaWG Analyzer</h1>
-    <p>Определение версии · Анализ параметров обфускации · DPI защита</p>
+    <p>Определение версии · Анализ параметров · DPI защита · Рекомендации</p>
+    <div class="subline">Поддержка: WireGuard · AWG 1.0 · AWG 1.5 · AWG 2.0 (full CPS chain)</div>
   </header>
 
   <div class="drop-zone" id="dropZone">
     <label>AWG / WireGuard .conf конфиг — или перетащите файл</label>
     <textarea id="configInput" placeholder="[Interface]
 PrivateKey = <base64>
-Address = 10.8.0.2/32
-DNS = 1.1.1.1
-Jc = 4
-Jmin = 50
-Jmax = 1000
-S1 = 84
-S2 = 0
-H1 = 123456789
-H2 = 987654321
-H3 = 111222333
-H4 = 444555666
-I1 = <b 0xc0000001><r 1200><c><t>
+Address = 10.45.12.2/32
+DNS = 1.1.1.1, 1.0.0.1
+MTU = 1320
+Jc = 5
+Jmin = 128
+Jmax = 768
+S1 = 20
+S2 = 70
+S3 = 32
+S4 = 8
+H1 = 1073741823-1073871823
+H2 = 2147483647-2147613647
+H3 = 3221225471-3221355471
+H4 = 4294967295-4294967295
+I1 = <b 0x1603030101210100011d0303...><r 999><rc 16><t>
 
 [Peer]
 PublicKey = <base64>
 PresharedKey = <base64>
-AllowedIPs = 0.0.0.0/0,::/0
-Endpoint = 1.2.3.4:51820
+AllowedIPs = 0.0.0.0/0, ::/0
+Endpoint = 1.2.3.4:47300
 PersistentKeepalive = 25"></textarea>
   </div>
   <div class="controls">
@@ -191,6 +182,12 @@ PersistentKeepalive = 25"></textarea>
   <div class="version-banner" id="versionBanner">
     <div class="ver-badge" id="verBadge">—</div>
     <div class="ver-desc" id="verDesc"></div>
+  </div>
+
+  <!-- Summary — что это за конфиг простым языком -->
+  <div class="summary" id="summaryBox">
+    <div class="summary-title">📋 Что это за конфиг</div>
+    <div class="summary-text" id="summaryText"></div>
   </div>
 
   <!-- Score -->
@@ -210,9 +207,16 @@ PersistentKeepalive = 25"></textarea>
     <div class="mini-scores" id="miniScores"></div>
   </div>
 
+  <!-- Auto-fix — что срочно исправить -->
   <div class="autofix" id="autofixBox">
-    <div class="autofix-title">💡 Рекомендации по улучшению</div>
+    <div class="autofix-title">🔧 Что срочно исправить</div>
     <div id="autofixList"></div>
+  </div>
+
+  <!-- Upgrade path — как усилить -->
+  <div class="upgrade" id="upgradeBox">
+    <div class="upgrade-title">🚀 Как усилить защиту</div>
+    <div id="upgradeList"></div>
   </div>
 
   <div class="parsed-params" id="parsedParams"></div>
@@ -270,71 +274,303 @@ function hasKey(obj, key) {
   return obj[key.toLowerCase()] !== undefined;
 }
 
+// Парсинг H1-H4: либо одиночное число, либо диапазон "start-end"
+function parseHRange(iface, key) {
+  const v = (iface[key.toLowerCase()] || '').toString().trim();
+  if (!v) return null;
+  const rm = v.match(/^(\d+)-(\d+)$/);
+  if (rm) {
+    return { start: parseInt(rm[1]), end: parseInt(rm[2]), isRange: true, width: parseInt(rm[2]) - parseInt(rm[1]), raw: v };
+  }
+  const n = parseInt(v);
+  if (isNaN(n)) return null;
+  return { start: n, end: n, isRange: false, width: 0, raw: v };
+}
+
+// ═══════════════════════════════════════════════════════════
+//  I1 DEEP PARSER — разбор CPS тегов
+// ═══════════════════════════════════════════════════════════
+function parseI1(i1) {
+  if (!i1) return null;
+  const result = {
+    tags: [],           // ['b', 'r', 'rc', 't', ...]
+    firstTag: null,
+    hexData: '',        // содержимое первого <b 0x...>
+    rTagSizes: [],
+    rcTagSizes: [],
+    totalRBytes: 0,
+    hasT: false,
+    hasC: false,
+    hasRc: false,
+    firstByteOk: false, // первый hex-байт валиден для протокола
+    startsWith_b: false,
+    maxRSize: 0,
+    errors: [],
+  };
+
+  // Разбираем все теги
+  const tagRegex = /<(\w+)(?:\s+([^>]*))?>/g;
+  let m;
+  while ((m = tagRegex.exec(i1)) !== null) {
+    const tag = m[1].toLowerCase();
+    const arg = (m[2] || '').trim();
+    result.tags.push({ tag, arg });
+
+    if (tag === 'b') {
+      const hexMatch = arg.match(/0x([0-9a-fA-F]+)/);
+      if (hexMatch) result.hexData = hexMatch[1].toLowerCase();
+    } else if (tag === 'r') {
+      const n = parseInt(arg);
+      if (!isNaN(n)) {
+        result.rTagSizes.push(n);
+        result.totalRBytes += n;
+        if (n > result.maxRSize) result.maxRSize = n;
+      }
+    } else if (tag === 'rc') {
+      result.hasRc = true;
+      const n = parseInt(arg);
+      if (!isNaN(n)) result.rcTagSizes.push(n);
+    } else if (tag === 't') {
+      result.hasT = true;
+    } else if (tag === 'c') {
+      result.hasC = true;
+    }
+  }
+
+  if (result.tags.length === 0) {
+    result.errors.push('не найдено ни одного тега');
+    return result;
+  }
+
+  result.firstTag = result.tags[0].tag;
+  result.startsWith_b = result.firstTag === 'b';
+
+  if (!result.startsWith_b) {
+    result.errors.push('первый тег должен быть <b 0x...> — иначе парсер amneziawg-go ломается');
+  }
+
+  // Лимит <r N> — должно быть < 1000
+  const tooLarge = result.rTagSizes.filter(n => n >= 1000);
+  if (tooLarge.length > 0) {
+    result.errors.push(`<r ${tooLarge[0]}> ≥ 1000 — парсер может сломаться, используй куски ≤999`);
+  }
+
+  // <c> — старый тег, вызывает ErrorCode 1000
+  if (result.hasC) {
+    result.errors.push('тег <c> устарел — вызывает ErrorCode 1000 на старых клиентах AmneziaVPN');
+  }
+
+  // Детект протокола по hex
+  result.protocol = detectI1Protocol(result.hexData);
+
+  // Проверка первого байта под протокол
+  if (result.hexData.length >= 2) {
+    const firstByte = parseInt(result.hexData.substring(0, 2), 16);
+    result.firstByte = firstByte;
+
+    if (result.protocol === 'QUIC') {
+      // QUIC long header: form=1 fixed=1 => первый байт 0xc0-0xef
+      result.firstByteOk = firstByte >= 0xc0 && firstByte <= 0xef;
+      if (!result.firstByteOk) {
+        result.errors.push(`первый байт 0x${firstByte.toString(16)} — не валидный QUIC long-header (нужно 0xc0-0xef)`);
+      }
+    } else if (result.protocol === 'TLS' || result.protocol === 'DTLS') {
+      result.firstByteOk = firstByte === 0x16;
+    } else if (result.protocol === 'SIP') {
+      // SIP — ASCII текст, первый байт = буква
+      result.firstByteOk = (firstByte >= 0x41 && firstByte <= 0x5a) || (firstByte >= 0x61 && firstByte <= 0x7a);
+    } else {
+      result.firstByteOk = true;
+    }
+  }
+
+  return result;
+}
+
+function detectI1Protocol(hex) {
+  if (!hex) return 'Unknown';
+  const h = hex.toLowerCase();
+
+  // TLS 1.0-1.3 record: 16 0301/0302/0303
+  if (/^16030[0-3]/.test(h)) return 'TLS';
+  // DTLS 1.0: 16 feff, DTLS 1.2: 16 fefd
+  if (/^16fefd/.test(h) || /^16feff/.test(h)) return 'DTLS';
+  // QUIC long header: первый байт 0xc0-0xef + известная version
+  const known_quic = ['00000001', '6b3343cf', 'ff00001d', 'ff00001e'];
+  if (h.length >= 10) {
+    const fb = parseInt(h.substring(0,2), 16);
+    const ver = h.substring(2, 10);
+    if (fb >= 0xc0 && fb <= 0xef && (known_quic.includes(ver) || h.startsWith('c0000'))) return 'QUIC';
+  }
+  // SIP методы в ASCII hex
+  const sip_hex = [
+    '494e56495445',     // INVITE
+    '5245474953544552', // REGISTER
+    '4f5054494f4e53',   // OPTIONS
+    '4d455353414745',   // MESSAGE
+    '5355425343524942', // SUBSCRIB(E)
+    '4e4f54494659',     // NOTIFY
+    '535542',           // SUB
+  ];
+  if (sip_hex.some(s => h.startsWith(s))) return 'SIP';
+  // DNS: txid(2) + flags(2) 0x0100/0x0120 + qdcount(2) 0x0001
+  if (/^[0-9a-f]{4}01[02]0000[12]/.test(h)) return 'DNS';
+  // HTTP plaintext (GET/POST/HTTP)
+  if (h.startsWith('474554') || h.startsWith('504f5354') || h.startsWith('48545450')) return 'HTTP';
+  // STUN binding request
+  if (h.startsWith('0001') && h.includes('2112a442')) return 'STUN';
+  return 'Custom';
+}
+
 // ═══════════════════════════════════════════════════════════
 //  VERSION DETECTION
 // ═══════════════════════════════════════════════════════════
+// Уровни: WireGuard < AWG 1.0 < AWG 1.5 < AWG 2.0
+// AWG 2.0 признаки: S3/S4 И H1-H4 диапазоны (ranges)
+// AWG 1.5 признаки: I1 + полный Jc/S1/S2/H1-H4
+// AWG 1.0 признаки: Jc > 0
 function detectVersion(iface) {
-  const hasJc  = hasKey(iface, 'jc');
-  const hasS1  = hasKey(iface, 's1');
-  const hasH1  = hasKey(iface, 'h1');
-  const hasI1  = hasKey(iface, 'i1');
-  const hasS3  = hasKey(iface, 's3');
-  const hasS4  = hasKey(iface, 's4');
+  const hasJc = hasKey(iface, 'jc');
+  const hasS1 = hasKey(iface, 's1');
+  const hasH1 = hasKey(iface, 'h1');
+  const hasI1 = hasKey(iface, 'i1');
+  const hasS3 = hasKey(iface, 's3');
+  const hasS4 = hasKey(iface, 's4');
 
   const Jc = getInt(iface, 'jc', 0);
   const S1 = getInt(iface, 's1', 0);
   const S2 = getInt(iface, 's2', 0);
 
-  // H1-H4 могут быть диапазонами (AWG 2.0) или одиночными числами
-  const parseH = (key, def) => {
-    const v = (iface[key.toLowerCase()] || '').toString().trim();
-    if (!v) return { val: def, isRange: false };
-    const rm = v.match(/^(\d+)-(\d+)$/);
-    if (rm) return { val: parseInt(rm[1]), isRange: true };
-    const n = parseInt(v);
-    return { val: isNaN(n) ? def : n, isRange: false };
-  };
-  const h1=parseH('h1',1), h2=parseH('h2',2), h3=parseH('h3',3), h4=parseH('h4',4);
-  const headersHaveRanges = h1.isRange || h2.isRange || h3.isRange || h4.isRange;
-  const headersDefault = !headersHaveRanges &&
-    h1.val===1 && h2.val===2 && h3.val===3 && h4.val===4;
+  const h1 = parseHRange(iface, 'h1');
+  const h2 = parseHRange(iface, 'h2');
+  const h3 = parseHRange(iface, 'h3');
+  const h4 = parseHRange(iface, 'h4');
+  const allH = [h1, h2, h3, h4];
+  const headersHaveRanges = allH.some(h => h && h.isRange);
+  const hasAllH = allH.every(h => h !== null);
+  const noHatAll = allH.every(h => h === null);
+  const headersDefault = noHatAll || (hasAllH && !headersHaveRanges &&
+    h1.start === 1 && h2.start === 2 && h3.start === 3 && h4.start === 4);
 
-  const getProto = () => {
-    const i1 = getStr(iface, 'i1');
-    if (i1.includes('0xc0') || i1.includes('0xC0')) return 'QUIC';
-    if (i1.includes('160303') || i1.includes('0x1603')) return 'TLS';
-    if (i1.toLowerCase().includes('register') || i1.toLowerCase().includes('sip')) return 'SIP';
-    if (i1.includes('0x0001') || i1.includes('0x0000')) return 'DNS';
-    return 'Custom';
-  };
+  // I1 разбор
+  const i1Parsed = hasI1 ? parseI1(getStr(iface, 'i1')) : null;
+  const protocolName = i1Parsed && i1Parsed.protocol !== 'Unknown' ? i1Parsed.protocol : 'Custom';
 
-  // Чистый WireGuard — нет AWG параметров или всё нулевое/дефолтное
-  const noObfuscation = (!hasJc || Jc===0) && (!hasS1 || (S1===0&&S2===0)) && headersDefault && !hasI1;
+  // Уровень обфускации (OBF_LEVEL)
+  const i2 = getStr(iface, 'i2');
+  const i3 = getStr(iface, 'i3');
+  const i4 = getStr(iface, 'i4');
+  const i5 = getStr(iface, 'i5');
+  const iCount = [getStr(iface,'i1'), i2, i3, i4, i5].filter(x => x).length;
+
+  let obfLevel = null;
+  if (!hasI1) obfLevel = 'Базовый (без CPS)';
+  else if (iCount === 1) obfLevel = '+I1 (одиночная мимикрия)';
+  else if (iCount >= 2) obfLevel = `+I1-I${iCount} (полный CPS chain)`;
+
+  // Чистый WireGuard
+  const noObfuscation = (!hasJc || Jc === 0) && (!hasS1 || (S1 === 0 && S2 === 0)) && headersDefault && !hasI1;
   if (noObfuscation) {
-    return { ver: 'WireGuard', cls: 'ver-wg',
-      desc: 'Стандартный WireGuard без обфускации. DPI легко обнаружит трафик.' };
+    return {
+      ver: 'WireGuard', cls: 'ver-wg',
+      desc: 'Стандартный WireGuard без обфускации. DPI легко обнаружит трафик по сигнатуре handshake.',
+      obfLevel: null, protocol: null,
+    };
   }
 
-  // AWG 2.0 — S3/S4 + I1 + H1-H4 диапазоны
-  if ((hasS3 || hasS4) && hasI1 && headersHaveRanges) {
-    return { ver: 'AWG 2.0', cls: 'ver-20',
-      desc: `AmneziaWG 2.0 — максимальная обфускация. H1-H4 диапазоны + S3/S4 рандомизируют все типы пакетов + CPS (I1 имитирует ${getProto()}).` };
+  // AWG 2.0 — S3/S4 + H диапазоны (CPS опционален)
+  if ((hasS3 || hasS4) && headersHaveRanges) {
+    const desc = hasI1
+      ? `AmneziaWG 2.0 — полная обфускация. H1-H4 диапазоны + S3/S4 рандомизируют все типы пакетов + CPS (I1 имитирует ${protocolName}).`
+      : `AmneziaWG 2.0 базовый — H1-H4 диапазоны + S3/S4, но без CPS мимикрии (I1 отсутствует).`;
+    return { ver: 'AWG 2.0', cls: 'ver-20', desc, obfLevel, protocol: protocolName };
   }
 
   // AWG 1.5 — есть I1
   if (hasI1) {
-    return { ver: 'AWG 1.5', cls: 'ver-15',
-      desc: `AmneziaWG 1.5 — Jc/S1/S2/H1-H4 + CPS (I1 имитирует ${getProto()} handshake). Для AWG 2.0 нужны S3/S4 и H1-H4 в виде диапазонов.` };
+    return {
+      ver: 'AWG 1.5', cls: 'ver-15',
+      desc: `AmneziaWG 1.5 — Jc/S1/S2/H1-H4 + CPS (I1 имитирует ${protocolName}). Для AWG 2.0 нужны S3/S4 и H1-H4 в виде диапазонов.`,
+      obfLevel, protocol: protocolName,
+    };
   }
 
   // AWG 1.0 — Jc + S1/S2 + H1-H4
   if (hasJc && Jc > 0) {
-    return { ver: 'AWG 1.0', cls: 'ver-10',
-      desc: 'AmneziaWG 1.0 — junk-пакеты (Jc/Jmin/Jmax) + S1/S2 рандомизируют размер handshake + кастомные H1-H4 скрывают сигнатуру WireGuard.' };
+    return {
+      ver: 'AWG 1.0', cls: 'ver-10',
+      desc: 'AmneziaWG 1.0 — junk-пакеты (Jc/Jmin/Jmax) + S1/S2 рандомизируют handshake + кастомные H1-H4 скрывают сигнатуру WireGuard. Нет CPS.',
+      obfLevel: 'Базовый', protocol: null,
+    };
   }
 
-  return { ver: 'AWG 1.0', cls: 'ver-10',
-    desc: 'AmneziaWG 1.0 — минимальная обфускация.' };
+  return {
+    ver: 'AWG 1.0', cls: 'ver-10',
+    desc: 'AmneziaWG минимальный — обфускация неполная.',
+    obfLevel: 'Минимум', protocol: null,
+  };
+}
+
+// ═══════════════════════════════════════════════════════════
+//  SUMMARY — что это за конфиг простым языком
+// ═══════════════════════════════════════════════════════════
+function buildSummary(iface, peer, version) {
+  const parts = [];
+
+  // Что за версия
+  parts.push(`Это конфиг <strong>${version.ver}</strong>.`);
+
+  // Кратко по функциональности
+  if (version.ver === 'WireGuard') {
+    parts.push('Обычный WireGuard без обфускации — все пакеты видны как WireGuard, DPI может заблокировать.');
+  } else if (version.ver === 'AWG 2.0') {
+    parts.push(`Уровень обфускации: <span class="pill">${version.obfLevel}</span>.`);
+    if (version.protocol && version.protocol !== 'Custom') {
+      parts.push(`CPS имитирует <strong>${version.protocol}</strong> — трафик выглядит как реальный ${version.protocol} handshake.`);
+    }
+  } else if (version.ver === 'AWG 1.5') {
+    parts.push(`Обфускация AWG 1.5 с CPS. Имитация: <strong>${version.protocol}</strong>.`);
+  } else {
+    parts.push('Базовая обфускация без CPS мимикрии.');
+  }
+
+  // Какой у нас сервер
+  const endpoint = getStr(peer, 'endpoint');
+  if (endpoint) {
+    const epParts = endpoint.split(':');
+    const port = epParts[epParts.length - 1];
+    const host = epParts.slice(0, -1).join(':').replace(/^\[|\]$/g, '');
+    const isIP = /^\d{1,3}(\.\d{1,3}){3}$/.test(host) || host.includes(':');
+    parts.push(`Сервер: <span class="pill">${host}:${port}</span> (${isIP ? 'IP' : 'домен'}).`);
+  }
+
+  // Маршрутизация
+  const allowed = getStr(peer, 'allowedips');
+  const fullTunnel = allowed.includes('0.0.0.0/0');
+  const ipv6Tunnel = allowed.includes('::/0');
+  if (fullTunnel && ipv6Tunnel) {
+    parts.push('Режим: <strong>полный туннель</strong> — весь трафик (IPv4+IPv6) через VPN.');
+  } else if (fullTunnel) {
+    parts.push('Режим: <strong>IPv4 туннель</strong> — только IPv4 через VPN, <span class="pill">возможна утечка IPv6</span>.');
+  } else if (allowed) {
+    parts.push(`Режим: <strong>split-tunnel</strong> — только <span class="pill">${allowed}</span> через VPN.`);
+  }
+
+  // DNS
+  const dns = getStr(iface, 'dns');
+  if (dns) {
+    parts.push(`DNS: <span class="pill">${dns}</span>.`);
+  } else {
+    parts.push('<strong>DNS не задан</strong> — риск DNS leak.');
+  }
+
+  // MTU
+  const mtu = getInt(iface, 'mtu', null);
+  if (mtu) {
+    parts.push(`MTU: <span class="pill">${mtu}</span>.`);
+  }
+
+  return parts.join(' ');
 }
 
 // ═══════════════════════════════════════════════════════════
@@ -342,238 +578,237 @@ function detectVersion(iface) {
 // ═══════════════════════════════════════════════════════════
 function runChecks(iface, peer, version) {
   const R = [];
-  const push = (cat,title,status,value,detail,pts,max) => R.push({cat,title,status,value:String(value),detail,pts,max});
+  const push = (cat, title, status, value, detail, pts, max) =>
+    R.push({ cat, title, status, value: String(value), detail, pts, max });
 
-  const Jc   = getInt(iface, 'jc',   null);
+  const Jc = getInt(iface, 'jc', null);
   const Jmin = getInt(iface, 'jmin', null);
   const Jmax = getInt(iface, 'jmax', null);
-  const S1   = getInt(iface, 's1',   null);
-  const S2   = getInt(iface, 's2',   null);
-  const S3   = getInt(iface, 's3',   null);
-  const S4   = getInt(iface, 's4',   null);
-  const H1   = getInt(iface, 'h1',   null);
-  const H2   = getInt(iface, 'h2',   null);
-  const H3   = getInt(iface, 'h3',   null);
-  const H4   = getInt(iface, 'h4',   null);
-  const I1   = getStr(iface, 'i1');
-  const I2   = getStr(iface, 'i2');
-  const I3   = getStr(iface, 'i3');
+  const S1 = getInt(iface, 's1', null);
+  const S2 = getInt(iface, 's2', null);
+  const S3 = getInt(iface, 's3', null);
+  const S4 = getInt(iface, 's4', null);
+  const I1 = getStr(iface, 'i1');
+  const I2 = getStr(iface, 'i2');
+  const I3 = getStr(iface, 'i3');
+  const I4 = getStr(iface, 'i4');
+  const I5 = getStr(iface, 'i5');
 
   // ── KEYS ────────────────────────────────────────────────
   const privkey = getStr(iface, 'privatekey');
   const isBase64 = s => /^[A-Za-z0-9+/]{43}=?$/.test(s);
   const pkOk = privkey && isBase64(privkey);
-  push('Ключи', 'PrivateKey', pkOk?'pass':'fail', pkOk?privkey.slice(0,12)+'…':'(отсутствует)',
-    pkOk?'Корректный base64 Curve25519 ключ':'Приватный ключ отсутствует или невалиден', pkOk?10:0, 10);
+  push('Ключи', 'PrivateKey', pkOk ? 'pass' : 'fail', pkOk ? privkey.slice(0, 12) + '…' : '(отсутствует)',
+    pkOk ? 'Корректный base64 Curve25519 ключ' : 'Приватный ключ отсутствует или невалиден', pkOk ? 10 : 0, 10);
 
   const pubkey = getStr(peer, 'publickey');
   const pubOk = pubkey && isBase64(pubkey);
-  push('Ключи', 'PublicKey (Peer)', pubOk?'pass':'fail', pubOk?pubkey.slice(0,12)+'…':'(отсутствует)',
-    pubOk?'Публичный ключ сервера присутствует':'Публичный ключ сервера отсутствует', pubOk?8:0, 8);
+  push('Ключи', 'PublicKey (Peer)', pubOk ? 'pass' : 'fail', pubOk ? pubkey.slice(0, 12) + '…' : '(отсутствует)',
+    pubOk ? 'Публичный ключ сервера присутствует' : 'Публичный ключ сервера отсутствует', pubOk ? 8 : 0, 8);
 
   const psk = getStr(peer, 'presharedkey');
   const pskOk = psk && isBase64(psk);
-  push('Ключи', 'PresharedKey', pskOk?'pass':'warn', pskOk?psk.slice(0,12)+'…':'(отсутствует)',
-    pskOk?'PresharedKey задан — дополнительный слой симметричного шифрования (post-quantum устойчивость)':
-           'PresharedKey отсутствует — дополнительная защита от будущих квантовых атак не активна',
-    pskOk?6:2, 6);
+  push('Ключи', 'PresharedKey', pskOk ? 'pass' : 'warn', pskOk ? psk.slice(0, 12) + '…' : '(отсутствует)',
+    pskOk ? 'PresharedKey задан — дополнительный слой симметричного шифрования (post-quantum устойчивость)' :
+      'PresharedKey отсутствует — дополнительная защита от будущих квантовых атак не активна',
+    pskOk ? 6 : 2, 6);
 
   // ── JUNK PACKETS ────────────────────────────────────────
   const hasJc = Jc !== null;
-  push('Junk-пакеты', 'Jc (количество junk-пакетов)', !hasJc?'fail':Jc===0?'warn':Jc>=3&&Jc<=10?'pass':'warn',
-    hasJc?String(Jc):'(не задан)',
-    !hasJc?'Jc не задан — нет junk-пакетов, хандшейк детектируется по размеру':
-    Jc===0?'Jc=0 — junk-пакеты отключены':
-    Jc>=3&&Jc<=10?`Jc=${Jc} — в рекомендуемом диапазоне 3-10 ✓`:
-    Jc>10?`Jc=${Jc} — слишком много, создаёт ненужный трафик (рекомендуется 3-10)`:
-           `Jc=${Jc} — мало (рекомендуется 3-10)`,
-    !hasJc?0:Jc===0?0:Jc>=3&&Jc<=10?8:4, 8);
+  push('Junk-пакеты', 'Jc (количество)', !hasJc ? 'fail' : Jc === 0 ? 'warn' : Jc >= 3 && Jc <= 10 ? 'pass' : 'warn',
+    hasJc ? String(Jc) : '(не задан)',
+    !hasJc ? 'Jc не задан — нет junk-пакетов, handshake детектируется по размеру' :
+      Jc === 0 ? 'Jc=0 — junk-пакеты отключены' :
+      Jc >= 3 && Jc <= 10 ? `Jc=${Jc} — в рекомендуемом диапазоне 3-10 ✓` :
+      Jc > 10 ? `Jc=${Jc} — слишком много, создаёт ненужный трафик (рекомендуется 3-10)` :
+      `Jc=${Jc} — мало (рекомендуется 3-10)`,
+    !hasJc ? 0 : Jc === 0 ? 0 : Jc >= 3 && Jc <= 10 ? 8 : 4, 8);
 
   if (hasJc && Jc > 0) {
     const jminOk = Jmin !== null && Jmin >= 10 && Jmin <= 500;
     const jmaxOk = Jmax !== null && Jmax >= Jmin && Jmax <= 1280;
-    const jrangeOk = jminOk && jmaxOk && (Jmax - Jmin) >= 30;
+    const jrangeOk = jminOk && jmaxOk && (Jmax - Jmin) >= 50;
 
-    push('Junk-пакеты', 'Jmin/Jmax (диапазон размеров)', jrangeOk?'pass':jminOk&&jmaxOk?'warn':'fail',
-      Jmin!==null&&Jmax!==null?`${Jmin}–${Jmax}`:'(не задан)',
-      Jmin===null||Jmax===null?'Jmin/Jmax не заданы — нужны при Jc>0':
-      !jmaxOk?`Jmax=${Jmax} должен быть ≤ 1280 (MTU)`:
-      !jminOk?`Jmin=${Jmin} слишком мало (рекомендуется ≥50)`:
-      (Jmax-Jmin)<30?'Диапазон Jmin-Jmax слишком мал — паттерн предсказуем':
+    push('Junk-пакеты', 'Jmin/Jmax (диапазон размеров)', jrangeOk ? 'pass' : jminOk && jmaxOk ? 'warn' : 'fail',
+      Jmin !== null && Jmax !== null ? `${Jmin}–${Jmax}` : '(не задан)',
+      Jmin === null || Jmax === null ? 'Jmin/Jmax не заданы — нужны при Jc>0' :
+      !jmaxOk ? `Jmax=${Jmax} должен быть ≤ 1280 (MTU)` :
+      !jminOk ? `Jmin=${Jmin} вне диапазона 10-500` :
+      (Jmax - Jmin) < 50 ? `Диапазон ${Jmin}-${Jmax} слишком узкий — рекомендуется ≥50 (размеры предсказуемы)` :
       `Jmin=${Jmin} Jmax=${Jmax} — хороший диапазон, размеры непредсказуемы`,
-      jrangeOk?6:jminOk&&jmaxOk?3:0, 6);
+      jrangeOk ? 6 : jminOk && jmaxOk ? 3 : 0, 6);
   }
 
-  // ── HANDSHAKE PADDING S1/S2 ─────────────────────────────
+  // ── S1/S2 — AWG 1.5+ ─────────────────────────────────────
   const hasS1 = S1 !== null, hasS2 = S2 !== null;
-  const s1Ok  = hasS1 && S1 >= 0 && S1 <= 64;
-  const s2Ok  = hasS2 && S2 >= 0 && S2 <= 64;
-  const s1s2Conflict = hasS1 && hasS2 && (S1 + 56 === S2); // S1+56 ≠ S2 — правило AWG
+  const s1Ok = hasS1 && S1 >= 0 && S1 <= 150;
+  const s2Ok = hasS2 && S2 >= 0 && S2 <= 1188; // AWG 2.0 protocol limit
+  const s1s2Conflict = hasS1 && hasS2 && (S1 + 56 === S2);
 
-  push('Handshake Padding (S1/S2)', 'S1 — Init prefix', !hasS1?'info':S1===0?'warn':s1Ok?'pass':'warn',
-    hasS1?String(S1):'(не задан)',
-    !hasS1?'S1 не задан — только в AWG 1.5/2.0':
-    S1===0?'S1=0 — рандомный префикс Init-пакета отключён':
-    s1Ok?`S1=${S1} — в рекомендуемом диапазоне 0-64 ✓`:
-         `S1=${S1} — вне рекомендуемого диапазона 0-64`,
-    !hasS1?1:S1===0?0:s1Ok?6:3, 6);
+  push('Handshake Padding (S1/S2)', 'S1 — Init prefix', !hasS1 ? 'info' : S1 === 0 ? 'warn' : s1Ok ? 'pass' : 'warn',
+    hasS1 ? String(S1) : '(не задан)',
+    !hasS1 ? 'S1 не задан — доступен в AWG 1.5 / 2.0' :
+    S1 === 0 ? 'S1=0 — рандомный префикс Init-пакета отключён' :
+    s1Ok ? `S1=${S1} — корректно ✓` :
+    `S1=${S1} — вне диапазона 0-150`,
+    !hasS1 ? 1 : S1 === 0 ? 0 : s1Ok ? 6 : 3, 6);
 
-  push('Handshake Padding (S1/S2)', 'S2 — Response prefix', !hasS2?'info':S2===0?'warn':s2Ok?'pass':'warn',
-    hasS2?String(S2):'(не задан)',
-    !hasS2?'S2 не задан — только в AWG 1.5/2.0':
-    S2===0?'S2=0 — рандомный префикс Response-пакета отключён':
-    s2Ok?`S2=${S2} — в рекомендуемом диапазоне 0-64 ✓`:
-         `S2=${S2} — вне рекомендуемого диапазона 0-64`,
-    !hasS2?1:S2===0?0:s2Ok?6:3, 6);
+  push('Handshake Padding (S1/S2)', 'S2 — Response prefix', !hasS2 ? 'info' : S2 === 0 ? 'warn' : s2Ok ? 'pass' : 'warn',
+    hasS2 ? String(S2) : '(не задан)',
+    !hasS2 ? 'S2 не задан — доступен в AWG 1.5 / 2.0' :
+    S2 === 0 ? 'S2=0 — рандомный префикс Response-пакета отключён' :
+    s2Ok ? `S2=${S2} — корректно (AWG 2.0 лимит 1188 байт) ✓` :
+    `S2=${S2} — превышает protocol limit 1188`,
+    !hasS2 ? 1 : S2 === 0 ? 0 : s2Ok ? 6 : 3, 6);
 
   if (s1s2Conflict) {
     push('Handshake Padding (S1/S2)', '⚠️ S1+56 = S2 конфликт', 'fail', `S1=${S1} S2=${S2}`,
-      `S1+56=${S1+56} совпадает с S2=${S2} — правило AWG: S1+56 ≠ S2. Это делает пакеты предсказуемыми!`, 0, 0);
+      `S1+56=${S1 + 56} совпадает с S2=${S2} — правило AWG: S1+56 ≠ S2. Это делает пакеты предсказуемыми!`, 0, 0);
   }
 
   // S3/S4 — только AWG 2.0
   if (S3 !== null || S4 !== null) {
     const s3Ok = S3 !== null && S3 >= 0 && S3 <= 64;
-    const s4Ok = S4 !== null && S4 >= 0 && S4 <= 64;
-    push('Handshake Padding (S1/S2)', 'S3/S4 (AWG 2.0 extended)', s3Ok&&s4Ok?'pass':'warn',
-      `S3=${S3??'—'} S4=${S4??'—'}`,
-      'S3/S4 — расширенные префиксы AWG 2.0 для Cookie и Data пакетов. Максимальная непредсказуемость размеров.',
-      s3Ok&&s4Ok?4:2, 4);
+    const s4Ok = S4 !== null && S4 >= 0 && S4 <= 32; // AWG 2.0: S4 max 32
+    let detail;
+    if (S4 !== null && S4 > 32) {
+      detail = `S4=${S4} — превышает лимит AWG 2.0 (максимум 32)`;
+    } else if (!s3Ok) {
+      detail = `S3=${S3} — вне диапазона 0-64`;
+    } else {
+      detail = 'S3/S4 — расширенные префиксы AWG 2.0 для Cookie и Data пакетов. Максимальная непредсказуемость размеров.';
+    }
+    push('Handshake Padding (S3/S4)', 'S3/S4 (AWG 2.0 extended)', s3Ok && s4Ok ? 'pass' : 'warn',
+      `S3=${S3 ?? '—'} S4=${S4 ?? '—'}`, detail, s3Ok && s4Ok ? 4 : 2, 4);
+  } else if (version.ver === 'AWG 2.0') {
+    push('Handshake Padding (S3/S4)', 'S3/S4', 'warn', '(не заданы)',
+      'S3/S4 отсутствуют в AWG 2.0 конфиге — handshake пакеты не рандомизированы по размеру', 0, 4);
   }
 
   // ── H1-H4 MAGIC HEADERS ──────────────────────────────────
-  const parseHcheck = (key, def) => {
-    const v = (iface[key.toLowerCase()] || '').toString().trim();
-    if (!v) return { val: def, isRange: false, raw: null };
-    const rm = v.match(/^(\d+)-(\d+)$/);
-    if (rm) return { val: parseInt(rm[1]), max: parseInt(rm[2]), isRange: true, raw: v };
-    const n = parseInt(v);
-    return { val: isNaN(n) ? def : n, isRange: false, raw: v };
-  };
-  const hc1=parseHcheck('h1',null), hc2=parseHcheck('h2',null);
-  const hc3=parseHcheck('h3',null), hc4=parseHcheck('h4',null);
-  const allHraw = [hc1,hc2,hc3,hc4];
-  const hasAllH = allHraw.every(h => h.raw !== null);
-  const hHaveRanges = allHraw.some(h => h.isRange);
-  const allHvals = allHraw.map(h => h.val);
-  const defaultH = !hHaveRanges && allHvals[0]===1 && allHvals[1]===2 && allHvals[2]===3 && allHvals[3]===4;
-  const uniqueH = hasAllH && new Set(allHvals).size === 4;
-  const hDisplayVal = hasAllH ? allHraw.map(h => h.isRange ? h.raw : h.val).join(' / ') : '(не заданы)';
+  const h1 = parseHRange(iface, 'h1');
+  const h2 = parseHRange(iface, 'h2');
+  const h3 = parseHRange(iface, 'h3');
+  const h4 = parseHRange(iface, 'h4');
+  const allHraw = [h1, h2, h3, h4];
+  const hasAllH = allHraw.every(h => h !== null);
+  const hHaveRanges = allHraw.some(h => h && h.isRange);
+  const startVals = hasAllH ? allHraw.map(h => h.start) : [];
+  const defaultH = hasAllH && !hHaveRanges && startVals[0] === 1 && startVals[1] === 2 && startVals[2] === 3 && startVals[3] === 4;
+  const uniqueH = hasAllH && new Set(startVals).size === 4;
+  const hDisplayVal = hasAllH ? allHraw.map(h => h.raw).join(' / ') : '(не заданы)';
+
+  // Проверка непересечения H диапазонов по квадрантам uint32 (Q = 2^30)
+  // H1: [0..Q], H2: [Q..2Q], H3: [2Q..3Q], H4: [3Q..4Q]
+  let quadrantsOk = true;
+  let overlap = false;
+  if (hasAllH && hHaveRanges) {
+    const Q = 1073741823;
+    const quadrantBounds = [[0, Q], [Q, 2*Q], [2*Q, 3*Q], [3*Q, 4*Q+1]];
+    for (let i = 0; i < 4; i++) {
+      const h = allHraw[i];
+      const [qMin, qMax] = quadrantBounds[i];
+      if (h.start < qMin || h.end > qMax) { quadrantsOk = false; break; }
+    }
+    // Проверка пересечения между H
+    for (let i = 0; i < 3; i++) {
+      if (allHraw[i].end >= allHraw[i+1].start) { overlap = true; break; }
+    }
+  }
 
   let hStatus, hPts, hDetail;
   if (!hasAllH) {
-    hStatus='warn'; hPts=0;
-    hDetail='H1-H4 не заданы или неполные — WireGuard сигнатура хандшейка не скрыта';
+    hStatus = 'warn'; hPts = 0;
+    hDetail = 'H1-H4 не заданы или неполные — WireGuard сигнатура handshake не скрыта';
   } else if (defaultH) {
-    hStatus='fail'; hPts=0;
-    hDetail='H1=1 H2=2 H3=3 H4=4 — ДЕФОЛТНЫЕ значения WireGuard! Хандшейк легко идентифицируется DPI.';
+    hStatus = 'fail'; hPts = 0;
+    hDetail = 'H1=1 H2=2 H3=3 H4=4 — ДЕФОЛТНЫЕ значения WireGuard! Handshake легко идентифицируется DPI.';
   } else if (!uniqueH) {
-    hStatus='fail'; hPts=0;
-    hDetail='H1-H4 содержат повторяющиеся значения — конфигурация невалидна (все заголовки должны быть уникальны)';
+    hStatus = 'fail'; hPts = 0;
+    hDetail = 'H1-H4 содержат повторяющиеся значения — конфигурация невалидна';
+  } else if (hHaveRanges && !quadrantsOk) {
+    hStatus = 'warn'; hPts = 6;
+    hDetail = 'H1-H4 диапазоны заданы, но не соответствуют квадрантам uint32 (Q=2^30). Это работает, но менее надёжно.';
+  } else if (hHaveRanges && overlap) {
+    hStatus = 'fail'; hPts = 0;
+    hDetail = 'H1-H4 диапазоны пересекаются — сервер и клиент могут рассинхронизироваться!';
   } else if (hHaveRanges) {
-    hStatus='pass'; hPts=12;
-    hDetail='H1-H4 заданы диапазонами — AWG 2.0 режим, каждое соединение использует случайное значение из диапазона ✓';
+    hStatus = 'pass'; hPts = 12;
+    hDetail = 'H1-H4 заданы диапазонами по квадрантам uint32 — AWG 2.0 режим, каждое соединение использует случайное значение ✓';
   } else {
-    hStatus='pass'; hPts=10;
-    hDetail='H1-H4 уникальны — сигнатура хандшейка скрыта ✓';
+    hStatus = 'pass'; hPts = 10;
+    hDetail = 'H1-H4 уникальны — сигнатура handshake скрыта ✓';
   }
 
   push('Magic Headers (H1-H4)', 'H1-H4', hStatus, hDisplayVal, hDetail, hPts, 12);
 
-  // Проверка ширины диапазонов H1-H4 (AWG 2.0)
+  // Ширина диапазонов
   if (hHaveRanges) {
-    const ranges = allHraw.map(h=>h.raw).filter(v=>v && v.includes('-'));
-    const smallRanges = ranges.filter(r=>{
-      const p=r.split('-'); return (parseInt(p[1])-parseInt(p[0]))<1000;
-    });
-    if (smallRanges.length){
-      push('Magic Headers (H1-H4)','Диапазон H слишком мал','warn',
-        smallRanges.join(', '),
-        'Маленький диапазон H уменьшает энтропию. Рекомендуется диапазон ≥1000 значений.',0,0);
-    }
-  }
-
-
-  // Проверка диапазона каждого H
-  if (hasAllH && uniqueH && !defaultH && !hHaveRanges) {
-    const tooSmall = allHvals.filter(h => h < 5);
-    if (tooSmall.length) {
-      push('Magic Headers (H1-H4)', 'H значения < 5', 'warn', tooSmall.join(', '),
-        'Значения H < 5 потенциально пересекаются с типами WireGuard (1-4). Рекомендуется H ≥ 5', 0, 0);
+    const narrowRanges = allHraw.filter(h => h.isRange && h.width < 1000);
+    if (narrowRanges.length) {
+      push('Magic Headers (H1-H4)', 'Ширина диапазонов H', 'warn',
+        narrowRanges.map(h => `${h.raw} (ширина ${h.width})`).join(', '),
+        'Узкие диапазоны H (<1000) уменьшают энтропию. Рекомендуется ширина ≥30000 для AWG 2.0.', 0, 0);
     }
   }
 
   // ── CPS / I1-I5 ──────────────────────────────────────────
+  const i1Parsed = I1 ? parseI1(I1) : null;
   const hasI1 = !!I1;
-  push('CPS Мимикрий (I1-I5)', 'I1 — Protocol Signature', hasI1?'pass':'info',
-    hasI1?I1.slice(0,40)+(I1.length>40?'…':''):'(не задан)',
-    hasI1?`CPS активен — трафик имитирует реальный протокол. Параметр I1: ${I1.length} байт описания`:
-           'I1 не задан — AWG 2.0 мимикрий отключён. Для максимальной защиты добавьте I1 с QUIC или DNS handshake.',
-    hasI1?15:0, 15);
 
-  if (hasI1) {
-    const i1lower = I1.toLowerCase();
-    
-    // Advanced protocol detector for I1
-    const hex = i1lower.replace(/[^0-9a-f]/g,'');
+  if (!hasI1) {
+    push('CPS Мимикрия (I1-I5)', 'I1 — Protocol Signature', 'info', '(не задан)',
+      'I1 отсутствует — CPS мимикрия отключена. Это базовый уровень AWG 2.0. Для максимальной защиты добавьте I1 с TLS/QUIC/DTLS handshake.',
+      0, 15);
+  } else {
+    // Критичные проверки I1
+    if (!i1Parsed.startsWith_b) {
+      push('CPS Мимикрия (I1-I5)', '🔴 I1 структура', 'fail', `первый тег: <${i1Parsed.firstTag}>`,
+        'I1 НЕ начинается с <b 0x...> — парсер amneziawg-go на клиенте ломает handshake. Переделай так чтобы первый тег был <b 0x...>.',
+        0, 15);
+    } else if (i1Parsed.hasC) {
+      push('CPS Мимикрия (I1-I5)', '⚠️ Устаревший тег <c>', 'fail', 'обнаружен',
+        'Тег <c> вызывает ErrorCode 1000 на старых клиентах AmneziaVPN. Убери его.',
+        5, 15);
+    } else if (i1Parsed.maxRSize >= 1000) {
+      push('CPS Мимикрия (I1-I5)', '⚠️ Большой <r>', 'warn',
+        `max <r ${i1Parsed.maxRSize}>`,
+        `Тег <r ${i1Parsed.maxRSize}> ≥ 1000 — на границе лимита парсера. Разбей на куски ≤999.`,
+        10, 15);
+    } else if (!i1Parsed.firstByteOk && i1Parsed.protocol !== 'Unknown' && i1Parsed.protocol !== 'Custom') {
+      push('CPS Мимикрия (I1-I5)', '⚠️ Первый байт I1', 'warn',
+        `0x${(i1Parsed.firstByte || 0).toString(16)}`,
+        `Первый байт hex не соответствует протоколу ${i1Parsed.protocol}.`,
+        10, 15);
+    } else {
+      push('CPS Мимикрия (I1-I5)', 'I1 — Protocol Signature', 'pass',
+        I1.slice(0, 40) + (I1.length > 40 ? '…' : ''),
+        `I1 валидный, начинается с <b 0x...>, max <r>=${i1Parsed.maxRSize}. Трафик имитирует реальный протокол.`,
+        15, 15);
+    }
 
-    const isQuic =
-        hex.startsWith('c0') ||
-        hex.includes('c0000001') ||
-        hex.includes('c3000000');
+    // Протокол
+    const protoDesc = {
+      'TLS': 'TLS 1.x ClientHello — отлично маскируется под HTTPS трафик, совместим с большинством DPI-систем.',
+      'DTLS': 'DTLS 1.0/1.2 record — имитация WebRTC/STUN, хорошо для видеозвонков.',
+      'QUIC': 'QUIC Initial handshake — идеальный выбор. QUIC популярен (YouTube, Google). DPI трудно отличить от легитимного HTTP/3.',
+      'SIP': 'SIP (VoIP) — телефонные сессии. Трудно блокировать из-за легитимного использования.',
+      'DNS': 'DNS query — имитация DNS запроса. Проходит через порт 53, почти не блокируется.',
+      'HTTP': 'HTTP request — маскировка под plaintext веб-запрос.',
+      'STUN': 'STUN binding request — WebRTC ICE.',
+      'Custom': 'Кастомный протокол. Убедись что hex реалистичен.',
+      'Unknown': 'Протокол не распознан.',
+    };
+    const protoPts = { 'QUIC': 5, 'TLS': 5, 'DTLS': 4, 'SIP': 4, 'DNS': 4, 'STUN': 3, 'HTTP': 2, 'Custom': 2, 'Unknown': 1 }[i1Parsed.protocol] || 1;
+    push('CPS Мимикрия (I1-I5)', 'Протокол имитации', protoPts >= 4 ? 'pass' : 'info',
+      i1Parsed.protocol, protoDesc[i1Parsed.protocol] || '(неизвестно)', protoPts, 5);
 
-    const isTls =
-        hex.startsWith('1603') ||
-        hex.includes('160301') ||
-        hex.includes('160303');
-
-    const isDns =
-        hex.includes('00010001') ||
-        hex.includes('000001000001') ||
-        hex.endsWith('00010001');
-
-    const isHttp =
-        hex.includes('474554') ||  // GET
-        hex.includes('504f5354') || // POST
-        hex.includes('48545450');   // HTTP
-
-    const isStun =
-        hex.startsWith('0001') && hex.includes('2112a442');
-
-    const isDtls =
-        hex.startsWith('16feff');
-
-    
-    let protoExplain = '';
-    if (isQuic) protoExplain = 'QUIC handshake — трафик похож на Google/YouTube HTTP3';
-    else if (isTls) protoExplain = 'TLS ClientHello — выглядит как обычный HTTPS';
-    else if (isDns) protoExplain = 'DNS query — имитация DNS запроса';
-    else if (isHttp) protoExplain = 'HTTP request — маскировка под веб‑запрос';
-    else if (isStun) protoExplain = 'STUN — используется WebRTC';
-    else if (isDtls) protoExplain = 'DTLS handshake';
-    else protoExplain = 'Неизвестная сигнатура';
-
-    const protoName =
-        isQuic ? 'QUIC Initial' :
-        isTls  ? 'TLS ClientHello' :
-        isDns  ? 'DNS Query' :
-        isHttp ? 'HTTP Request' :
-        isStun ? 'STUN' :
-        isDtls ? 'DTLS' :
-        'Custom';
-
-    const iCount = [I1,I2,I3,getStr(iface,'i4'),getStr(iface,'i5')].filter(i=>i).length;
-
-    push('CPS Мимикрий (I1-I5)', 'Протокол имитации', 'pass', protoName,
-      isQuic?'QUIC Initial handshake — идеальный выбор. QUIC — популярный протокол (YouTube, Google). DPI трудно отличить.':
-      isTls?'TLS ClientHello — отлично маскируется под HTTPS трафик':
-      isDns?'DNS Query имитация — трудно блокировать (порт 53 обычно открыт)':
-           'Кастомный протокол. Убедитесь что hex-последовательность реалистична.',
-      isQuic?5:isDns?4:3, 5);
-
-    if (iCount > 1) {
-      push('CPS Мимикрий (I1-I5)', `Цепочка I1-I${iCount}`, 'pass', `${iCount} пакетов`,
-        `Задано ${iCount} сигнатурных пакетов — высокая энтропия сессии, счётчики и временные метки варьируются`, 3, 3);
+    // Цепочка I2-I5
+    const iList = [I1, I2, I3, I4, I5].filter(x => x);
+    if (iList.length > 1) {
+      push('CPS Мимикрия (I1-I5)', `Цепочка I1-I${iList.length}`, 'pass', `${iList.length} пакетов`,
+        `Задано ${iList.length} сигнатурных пакетов — высокая энтропия сессии (полный CPS chain). Counter-measures DPI затруднены.`,
+        3, 3);
     }
   }
 
@@ -581,31 +816,29 @@ function runChecks(iface, peer, version) {
   const endpoint = getStr(peer, 'endpoint');
   if (endpoint) {
     const ep = endpoint.split(':');
-    const epPort = parseInt(ep[ep.length-1]);
-    const epHost = ep.slice(0,-1).join(':').replace(/^\[|\]$/g,'');
-    const portOk = epPort === 443 || epPort === 80 || (epPort >= 1024 && epPort <= 65535);
-    const portStd = epPort === 443;
-    const portDns = epPort === 53;
-    const portUdp = epPort === 51820 || epPort === 51821;
+    const epPort = parseInt(ep[ep.length - 1]);
+    const epHost = ep.slice(0, -1).join(':').replace(/^\[|\]$/g, '');
+    const portStdWG = epPort === 51820 || epPort === 51821;
 
-    push('Сервер', 'Endpoint порт', portUdp?'warn':epPort<1024?'warn':'pass',
+    push('Сервер', 'Endpoint порт', portStdWG ? 'warn' : epPort < 1024 ? 'warn' : 'pass',
       String(epPort),
-      portUdp?`${epPort} — стандартный WireGuard порт, легко идентифицируется DPI. Смените на любой выше 1024`:
-      epPort===53?'53 (DNS) — почти не блокируется, но может перехватываться DNS-прокси':
-      epPort<1024?`${epPort} — системный порт (<1024), могут быть проблемы`:
-              `${epPort} — нормально. Для AWG порт не критичен`,
-      portUdp?2:epPort<1024?2:5, 5);
+      portStdWG ? `${epPort} — стандартный WireGuard порт, легко идентифицируется DPI. Смени на любой выше 1024.` :
+      epPort === 443 ? '443 (HTTPS) — отлично маскируется под TLS трафик' :
+      epPort === 53 ? '53 (DNS) — почти не блокируется' :
+      epPort < 1024 ? `${epPort} — системный порт (<1024), могут быть проблемы` :
+      `${epPort} — нормально`,
+      portStdWG ? 2 : epPort < 1024 ? 2 : 5, 5);
 
     const isIPv4 = /^\d{1,3}(\.\d{1,3}){3}$/.test(epHost);
     const isIPv6 = epHost.includes(':');
     const isDomain = !isIPv4 && !isIPv6 && epHost.includes('.');
-    push('Сервер', 'Endpoint адрес', isDomain?'pass':(isIPv4||isIPv6)?'warn':'fail',
-      epHost||'?',
-      isDomain?'Домен — удобнее при смене IP сервера':
-      isIPv4?'IPv4 адрес — риск блокировки по IP':
-      isIPv6?'IPv6 адрес — хорошо обходит некоторые блокировки по IPv4':
-             'Неверный формат endpoint',
-      isDomain?4:(isIPv4||isIPv6)?2:0, 4);
+    push('Сервер', 'Endpoint адрес', isIPv4 || isIPv6 ? 'pass' : isDomain ? 'warn' : 'fail',
+      epHost || '?',
+      isIPv4 ? 'IPv4 адрес — рекомендуется для AWG (домен вызывает deadlock переподключения на Keenetic и некоторых Android-клиентах)' :
+      isIPv6 ? 'IPv6 адрес — работает, но помни про deadlock у домена' :
+      isDomain ? '⚠️ Домен в Endpoint — может вызвать deadlock переподключения на Keenetic и старых AmneziaVPN. Рекомендуется IP.' :
+      'Неверный формат endpoint',
+      isIPv4 || isIPv6 ? 4 : isDomain ? 1 : 0, 4);
   }
 
   // AllowedIPs — DNS leak
@@ -614,52 +847,59 @@ function runChecks(iface, peer, version) {
   const hasIPv6Tunnel = allowedIPs.includes('::/0');
   const splitTunnel = allowedIPs && !fullTunnel;
 
-  push('Маршрутизация', 'AllowedIPs', fullTunnel&&hasIPv6Tunnel?'pass':fullTunnel?'warn':splitTunnel?'info':'fail',
-    allowedIPs||'(не задан)',
-    fullTunnel&&hasIPv6Tunnel?'0.0.0.0/0 + ::/0 — весь трафик (IPv4+IPv6) через VPN, минимальный DNS leak риск':
-    fullTunnel?'0.0.0.0/0 без ::/0 — IPv4 через VPN, IPv6 может утечь (DNS/WebRTC leak риск)':
-    splitTunnel?'Split-tunneling — часть трафика мимо VPN (намеренно или нет)':
-                'AllowedIPs не задан',
-    fullTunnel&&hasIPv6Tunnel?6:fullTunnel?3:splitTunnel?2:0, 6);
+  push('Маршрутизация', 'AllowedIPs', fullTunnel && hasIPv6Tunnel ? 'pass' : fullTunnel ? 'warn' : splitTunnel ? 'info' : 'fail',
+    allowedIPs || '(не задан)',
+    fullTunnel && hasIPv6Tunnel ? '0.0.0.0/0 + ::/0 — весь трафик (IPv4+IPv6) через VPN, минимальный DNS leak' :
+    fullTunnel ? '0.0.0.0/0 без ::/0 — IPv4 через VPN, IPv6 может утечь (DNS/WebRTC leak)' :
+    splitTunnel ? 'Split-tunneling — часть трафика мимо VPN' :
+    'AllowedIPs не задан',
+    fullTunnel && hasIPv6Tunnel ? 6 : fullTunnel ? 3 : splitTunnel ? 2 : 0, 6);
 
-  // DNS leak check
+  // DNS
   const dns = getStr(iface, 'dns');
   const dnsOk = !!dns;
-  const dnsPrivate = dns.includes('10.') || dns.includes('192.168.') || dns.includes('172.');
-  const dnsPublicGood = ['1.1.1.1','8.8.8.8','9.9.9.9','208.67.222.222','94.140.14.14'].some(d=>dns.includes(d));
-  push('Маршрутизация', 'DNS', dnsOk?(dnsPrivate?'pass':dnsPublicGood?'warn':'warn'):'fail',
-    dns||'(не задан)',
-    !dnsOk?'DNS не задан — запросы идут мимо VPN, полный DNS leak':
-    dnsPrivate?`DNS сервера VPN (${dns}) — запросы через туннель, нет утечки`:
-    dnsPublicGood?`${dns} — публичный DNS через туннель, работает, но предпочтительнее DNS сервера VPN`:
-                  `${dns} — нестандартный DNS, убедитесь что запросы идут через туннель`,
-    dnsOk?(dnsPrivate?6:dnsPublicGood?4:3):0, 6);
+  const dnsPrivate = /10\.|192\.168\.|172\.(1[6-9]|2\d|3[01])\./.test(dns);
+  const dnsPublicGood = ['1.1.1.1', '8.8.8.8', '9.9.9.9', '208.67.222.222', '94.140.14.14', '77.88.8.8'].some(d => dns.includes(d));
+  push('Маршрутизация', 'DNS', dnsOk ? (dnsPrivate || dnsPublicGood ? 'pass' : 'warn') : 'fail',
+    dns || '(не задан)',
+    !dnsOk ? 'DNS не задан — запросы идут мимо VPN, полный DNS leak' :
+    dnsPrivate ? `Приватный DNS (${dns}) — запросы через туннель, нет утечки` :
+    dnsPublicGood ? `${dns} — публичный DNS, работает через туннель` :
+    `${dns} — нестандартный DNS, проверь что запросы идут через туннель`,
+    dnsOk ? (dnsPrivate ? 6 : dnsPublicGood ? 4 : 3) : 0, 6);
 
   // ── MTU ─────────────────────────────────────────────────
   const mtu = getInt(iface, 'mtu', null);
   if (mtu !== null) {
-    const mtuOk = mtu >= 1200 && mtu <= 1420;
-    const mtuJmax = getInt(iface,'jmax',null);
-    const mtuConflict = mtuJmax !== null && mtuJmax >= mtu;
-    push('Сеть', 'MTU', mtuConflict?'fail':mtuOk?'pass':'warn',
-      String(mtu),
-      mtuConflict?`MTU=${mtu} но Jmax=${mtuJmax} ≥ MTU — система будет фрагментировать junk-пакеты, это выглядит подозрительно!`:
-      mtuOk?`MTU=${mtu} — корректное значение для AWG`:
-            `MTU=${mtu} — вне рекомендуемого диапазона 1200-1420`,
-      mtuConflict?0:mtuOk?4:2, 4);
+    const isAwg2 = version.ver === 'AWG 2.0';
+    const mtuOk = mtu >= 1280 && mtu <= 1420;
+    const mtuOptimal = isAwg2 ? (mtu >= 1280 && mtu <= 1340) : (mtu >= 1320 && mtu <= 1420);
+    const mtuConflict = Jmax !== null && Jmax >= mtu;
+
+    let detail;
+    if (mtuConflict) detail = `MTU=${mtu} но Jmax=${Jmax} ≥ MTU — junk-пакеты будут фрагментироваться, DPI заметит!`;
+    else if (!mtuOk) detail = `MTU=${mtu} — вне рекомендуемого диапазона 1280-1420`;
+    else if (isAwg2 && !mtuOptimal) detail = `MTU=${mtu} — работает, но для AWG 2.0+CPS оптимум 1280-1340 (CPS пакеты могут быть большими)`;
+    else detail = `MTU=${mtu} — оптимальное значение`;
+
+    push('Сеть', 'MTU', mtuConflict ? 'fail' : mtuOk && (!isAwg2 || mtuOptimal) ? 'pass' : 'warn',
+      String(mtu), detail, mtuConflict ? 0 : mtuOk && (!isAwg2 || mtuOptimal) ? 4 : 2, 4);
+  } else {
+    push('Сеть', 'MTU', 'warn', '(не задан)',
+      'MTU не задан — будет использован дефолт 1420, но для AWG 2.0 лучше указать 1320', 1, 4);
   }
 
-  // KeepaliveCheck
+  // Keepalive
   const ka = getInt(peer, 'persistentkeepalive', null);
   if (ka !== null) {
     const kaOk = ka >= 15 && ka <= 60;
-    push('Сеть', 'PersistentKeepalive', ka===0?'info':kaOk?'pass':'warn',
+    push('Сеть', 'PersistentKeepalive', ka === 0 ? 'info' : kaOk ? 'pass' : 'warn',
       String(ka),
-      ka===0?'Отключён — соединение может разорваться за NAT. Рекомендуется 20-35 секунд для стабильной работы':
-      kaOk?`${ka}s — хорошее значение, поддерживает NAT-соединение`:
-      ka<15?`${ka}s — слишком часто, создаёт лишний трафик (рекомендуется 15-60)`:
-            `${ka}s — редко, NAT может закрыть соединение (рекомендуется 15-60)`,
-      ka===0?3:kaOk?3:1, 3);
+      ka === 0 ? 'Отключён — соединение может разорваться за NAT. Рекомендуется 20-35 секунд.' :
+      kaOk ? `${ka}s — хорошо, поддерживает NAT-соединение` :
+      ka < 15 ? `${ka}s — слишком часто (рекомендуется 15-60)` :
+      `${ka}s — редко, NAT может закрыть соединение (рекомендуется 15-60)`,
+      ka === 0 ? 3 : kaOk ? 3 : 1, 3);
   }
 
   return R;
@@ -669,113 +909,251 @@ function runChecks(iface, peer, version) {
 //  SCORING
 // ═══════════════════════════════════════════════════════════
 function calcScores(checks, iface, version) {
-  const tp = checks.reduce((a,c)=>a+c.pts,0);
-  const mp = checks.reduce((a,c)=>a+c.max,0);
-  const total = Math.round((tp/mp)*100);
+  const tp = checks.reduce((a, c) => a + c.pts, 0);
+  const mp = checks.reduce((a, c) => a + c.max, 0);
+  const total = Math.round((tp / mp) * 100);
 
-  // DPI score
+  // DPI risk — чем выше тем хуже
   let dpi = 95;
-  if (version.ver.includes('2.0')) dpi -= 55;
-  else if (version.ver.includes('1.5')) dpi -= 40;
-  else if (version.ver.includes('1.0')) dpi -= 25;
-  const Jc = getInt(iface,'jc',0);
-  if (Jc>=3) dpi -= 10;
-  const H1=getInt(iface,'h1',1), H2=getInt(iface,'h2',2), H3=getInt(iface,'h3',3), H4=getInt(iface,'h4',4);
-  if (!(H1===1&&H2===2&&H3===3&&H4===4)) dpi -= 5;
-  dpi = Math.max(3, Math.min(92, dpi));
+  if (version.ver === 'AWG 2.0') dpi -= 55;
+  else if (version.ver === 'AWG 1.5') dpi -= 40;
+  else if (version.ver === 'AWG 1.0') dpi -= 25;
 
-  // Stealth
-  const stealth = Math.round(100 - dpi * 0.75);
+  const Jc = getInt(iface, 'jc', 0);
+  if (Jc >= 3) dpi -= 10;
+
+  const h1 = parseHRange(iface, 'h1');
+  if (h1 && h1.isRange) dpi -= 8;
+
+  const hasValidI1 = iface.i1 && parseI1(iface.i1).startsWith_b;
+  if (hasValidI1) dpi -= 12;
+
+  const iCount = ['i1','i2','i3','i4','i5'].filter(k => iface[k]).length;
+  if (iCount >= 3) dpi -= 5;
+
+  dpi = Math.max(3, Math.min(92, dpi));
+  const stealth = Math.round(100 - dpi * 0.82);
 
   return { total, dpi, stealth };
 }
 
-
-function buildFixes(checks, iface, version) {
+// ═══════════════════════════════════════════════════════════
+//  FIXES — что срочно исправить (с severity)
+// ═══════════════════════════════════════════════════════════
+function buildFixes(checks, iface, peer, version) {
   const fixes = [];
+  const add = (severity, text) => fixes.push({ severity, text });
 
-  const Jc   = getInt(iface,'jc',null);
-  const Jmin = getInt(iface,'jmin',null);
-  const Jmax = getInt(iface,'jmax',null);
-  const S1   = getInt(iface,'s1',null);
-  const S2   = getInt(iface,'s2',null);
-  const S3   = getInt(iface,'s3',null);
-  const S4   = getInt(iface,'s4',null);
+  const Jc = getInt(iface, 'jc', null);
+  const Jmin = getInt(iface, 'jmin', null);
+  const Jmax = getInt(iface, 'jmax', null);
+  const S1 = getInt(iface, 's1', null);
+  const S2 = getInt(iface, 's2', null);
+  const S4 = getInt(iface, 's4', null);
+  const mtu = getInt(iface, 'mtu', null);
 
-  const H1=getInt(iface,'h1',null);
-  const H2=getInt(iface,'h2',null);
-  const H3=getInt(iface,'h3',null);
-  const H4=getInt(iface,'h4',null);
+  // === CRIT (ломает работу) ===
+  if (iface.i1) {
+    const i1p = parseI1(iface.i1);
+    if (!i1p.startsWith_b) {
+      add('crit', 'I1 должен начинаться с <code class="fix-code">&lt;b 0x...&gt;</code> — иначе handshake ломается на Android/Keenetic.');
+    }
+    if (i1p.hasC) {
+      add('crit', 'Убери тег <code class="fix-code">&lt;c&gt;</code> из I1 — вызывает ErrorCode 1000.');
+    }
+    if (i1p.maxRSize >= 1000) {
+      add('high', `Тег <code class="fix-code">&lt;r ${i1p.maxRSize}&gt;</code> ≥ 1000 — разбей на куски ≤999.`);
+    }
+  }
 
-  const dns = getStr(iface,'dns');
-  const endpoint = getStr(checks.find(c=>c.title==='Endpoint порт') ? {} : iface,'endpoint') || getStr(iface,'endpoint');
+  // H1-H4 default
+  const h1 = parseHRange(iface, 'h1');
+  const h2 = parseHRange(iface, 'h2');
+  const h3 = parseHRange(iface, 'h3');
+  const h4 = parseHRange(iface, 'h4');
+  if (h1 && h2 && h3 && h4 && !h1.isRange && h1.start === 1 && h2.start === 2 && h3.start === 3 && h4.start === 4) {
+    add('crit', 'H1=1 H2=2 H3=3 H4=4 — дефолтные значения WireGuard. DPI сразу видит сигнатуру. Используй случайные числа ≥5.');
+  }
 
-  // DNS
-  if (!dns)
-    fixes.push('Добавьте DNS в [Interface] чтобы избежать DNS leak (например DNS = 1.1.1.1 или DNS сервера VPN).');
+  // S1+56=S2
+  if (S1 !== null && S2 !== null && S1 + 56 === S2) {
+    add('high', `S1+56=${S1+56} совпадает с S2=${S2}. Измени S1 или S2 — правило AWG: S1+56 ≠ S2.`);
+  }
 
-  // IPv6 leak
-  const allowed = getStr(iface,'allowedips') || checks.find(c=>c.title==='AllowedIPs')?.value || '';
-  if (!allowed.includes('::/0'))
-    fixes.push('Добавьте ::/0 в AllowedIPs чтобы закрыть IPv6 DNS/WebRTC leak.');
+  // S4 > 32
+  if (S4 !== null && S4 > 32) {
+    add('high', `S4=${S4} превышает лимит AWG 2.0 (максимум 32).`);
+  }
 
-  // Junk packets
-  if (Jc !== null && Jc < 3)
-    fixes.push('Увеличьте Jc до диапазона 3–10 — больше junk‑пакетов повышает устойчивость к DPI.');
+  // Endpoint=домен
+  const endpoint = getStr(peer, 'endpoint');
+  if (endpoint) {
+    const ep = endpoint.split(':');
+    const epHost = ep.slice(0, -1).join(':').replace(/^\[|\]$/g, '');
+    const isIP = /^\d{1,3}(\.\d{1,3}){3}$/.test(epHost) || epHost.includes(':');
+    if (!isIP && epHost) {
+      add('high', 'Endpoint содержит домен — это вызывает deadlock переподключения на Keenetic и старых AmneziaVPN. Замени на IP.');
+    }
+  }
 
-  if (Jmin !== null && Jmax !== null && (Jmax - Jmin) < 30)
-    fixes.push('Увеличьте диапазон Jmin/Jmax (разница ≥30) чтобы размеры junk‑пакетов были менее предсказуемы.');
+  // Jmax ≥ MTU
+  if (mtu !== null && Jmax !== null && Jmax >= mtu) {
+    add('high', `Jmax=${Jmax} ≥ MTU=${mtu}. Junk-пакеты будут фрагментироваться. Сделай Jmax ≤ ${mtu - 50}.`);
+  }
 
-  // Handshake
-  if (S1 !== null && S2 !== null && (S1 + 56 === S2))
-    fixes.push('Измените S1 или S2 — правило AWG: S1 + 56 ≠ S2.');
+  // === MEDIUM (снижает скрытность) ===
+  if (!iface.dns) {
+    add('med', 'Добавь <code class="fix-code">DNS = 1.1.1.1, 1.0.0.1</code> в [Interface] — иначе DNS leak.');
+  }
 
-  // AWG version suggestions
-  if (version.ver === 'WireGuard')
-    fixes.push('Используйте AmneziaWG вместо чистого WireGuard — это добавит обфускацию и защиту от DPI.');
+  const allowed = getStr(peer, 'allowedips');
+  if (allowed.includes('0.0.0.0/0') && !allowed.includes('::/0')) {
+    add('med', 'Добавь <code class="fix-code">::/0</code> в AllowedIPs чтобы закрыть IPv6 leak.');
+  }
 
-  if (version.ver === 'AWG 1.5')
-    fixes.push('Для максимальной обфускации используйте AWG 2.0 (добавьте параметры S3 и S4).');
+  if (Jc !== null && Jc < 3 && Jc > 0) {
+    add('med', `Jc=${Jc} — мало. Увеличь до 3-10 для лучшей обфускации.`);
+  }
+  if (Jc === 0 || Jc === null) {
+    add('med', 'Jc = 0 или не задан — junk-пакеты отключены. Рекомендуется Jc = 5.');
+  }
 
-  // Magic headers
-  if (H1===1 && H2===2 && H3===3 && H4===4)
-    fixes.push('Измените H1‑H4 — значения 1‑4 являются сигнатурой стандартного WireGuard.');
+  if (Jmin !== null && Jmax !== null && (Jmax - Jmin) < 50) {
+    add('med', `Jmin-Jmax диапазон слишком узкий (${Jmin}-${Jmax}). Расширь до ≥50 байт разницы.`);
+  }
 
-  // Endpoint domain suggestion
-  const epCheck = checks.find(c=>c.title==='Endpoint адрес');
-  if (epCheck && epCheck.status === 'warn')
-    fixes.push('Используйте доменное имя вместо IP в Endpoint — это усложняет блокировку по IP и позволяет менять сервер без обновления конфигов.');
+  // === LOW (оптимизация) ===
+  if (version.ver === 'WireGuard') {
+    add('high', 'Это чистый WireGuard без обфускации. Используй AmneziaWG — добавит Jc/S/H/I параметры.');
+  }
 
-  // CPS
-  if (!iface.i1)
-    fixes.push('Добавьте CPS сигнатуру (I1) чтобы трафик имитировал реальный протокол (DNS, TLS или QUIC).');
+  if (version.ver === 'AWG 1.0' || version.ver === 'AWG 1.5') {
+    add('low', 'Обнови до AWG 2.0: добавь S3/S4 и переделай H1-H4 в диапазоны.');
+  }
+
+  const pubEndpoint = getStr(peer, 'endpoint');
+  if (pubEndpoint) {
+    const ep = pubEndpoint.split(':');
+    const epPort = parseInt(ep[ep.length - 1]);
+    if (epPort === 51820 || epPort === 51821) {
+      add('low', `Порт ${epPort} — стандартный WireGuard. Смени на случайный выше 1024 (например, 47300).`);
+    }
+  }
+
+  if (mtu === null) {
+    add('low', 'Задай <code class="fix-code">MTU = 1320</code> — оптимум для AWG 2.0 + CPS.');
+  }
+
+  if (!getStr(peer, 'presharedkey')) {
+    add('low', 'Добавь PresharedKey — дополнительный слой симметричного шифрования (post-quantum устойчивость).');
+  }
 
   return fixes;
 }
 
+// ═══════════════════════════════════════════════════════════
+//  UPGRADE PATH — как усилить защиту
+// ═══════════════════════════════════════════════════════════
+function buildUpgradePath(iface, version) {
+  const steps = [];
+  const hasI1 = !!getStr(iface, 'i1');
+  const S3 = getInt(iface, 's3', null);
+  const S4 = getInt(iface, 's4', null);
+  const h1 = parseHRange(iface, 'h1');
+
+  if (version.ver === 'WireGuard') {
+    steps.push({
+      title: 'Шаг 1: Перейди на AmneziaWG',
+      text: 'Установи amneziawg-tools и пересоздай сервер с Jc/Jmin/Jmax/S1/S2/H1-H4 параметрами. Это добавит базовую обфускацию.',
+      cmd: '# На сервере:\nsudo add-apt-repository ppa:amnezia/ppa\nsudo apt install amneziawg amneziawg-tools',
+    });
+  }
+
+  if (version.ver === 'AWG 1.0' || version.ver === 'AWG 1.5') {
+    steps.push({
+      title: 'Шаг 1: Обнови до AWG 2.0',
+      text: 'AWG 2.0 добавляет S3/S4 (дополнительная рандомизация) и H1-H4 как диапазоны (случайное значение каждый handshake). Пропиши в [Interface]:',
+      cmd: 'S3 = 32\nS4 = 8\nH1 = 100000000-100100000\nH2 = 1200000000-1200100000\nH3 = 2300000000-2300100000\nH4 = 3400000000-3400100000',
+    });
+  }
+
+  if (version.ver.includes('AWG') && !hasI1) {
+    steps.push({
+      title: `Шаг ${steps.length + 1}: Добавь CPS мимикрию (I1)`,
+      text: 'I1 — сигнатурный пакет который имитирует реальный протокол (TLS/QUIC/DTLS/SIP). Без него DPI видит "странный UDP". Сгенерируй через awg2-toolza:',
+      cmd: 'sudo awg2\n# Пункт 2 → создать сервер → Уровень 2 (+I1) → TLS профиль',
+    });
+  }
+
+  if (version.ver === 'AWG 2.0' && hasI1) {
+    const iCount = ['i2', 'i3', 'i4', 'i5'].filter(k => iface[k]).length;
+    if (iCount === 0) {
+      steps.push({
+        title: `Шаг ${steps.length + 1}: Добавь полный CPS chain (I2-I5)`,
+        text: 'I2-I5 это энтропийные пакеты — размывают паттерн handshake. Вариативность сессий → DPI сложнее построить сигнатуру. Только на современных клиентах (AmneziaVPN 4.8.12+).',
+        cmd: 'sudo awg2\n# Пункт 2 → Уровень 3 (+I1-I5)',
+      });
+    }
+  }
+
+  // Порт и endpoint
+  const endpointPort = (() => {
+    const ep = (iface.endpoint || '').split(':');
+    return parseInt(ep[ep.length - 1]);
+  })();
+
+  if (endpointPort === 51820 || endpointPort === 51821) {
+    steps.push({
+      title: `Шаг ${steps.length + 1}: Смени порт сервера`,
+      text: 'Порт 51820/51821 — стандарт WireGuard. DPI может фильтровать по порту. Используй случайный 30000-65000.',
+      cmd: '# При пересоздании сервера укажи:\nПорт: r  # случайный',
+    });
+  }
+
+  // H1-H4 диапазоны
+  if (h1 && !h1.isRange && version.ver.includes('AWG')) {
+    steps.push({
+      title: `Шаг ${steps.length + 1}: Переделай H1-H4 в диапазоны`,
+      text: 'H1-H4 как одиночные числа работают, но каждое соединение использует одно и то же значение. DPI может их запомнить. Диапазоны дают уникальный magic каждый handshake.',
+      cmd: '# Распредели по квадрантам uint32:\nH1 = 100000000-100100000    # 0..Q\nH2 = 1200000000-1200100000  # Q..2Q\nH3 = 2300000000-2300100000  # 2Q..3Q\nH4 = 3400000000-3400100000  # 3Q..4Q',
+    });
+  }
+
+  // MTU оптимизация
+  const mtu = getInt(iface, 'mtu', null);
+  if (mtu !== null && mtu > 1340 && version.ver === 'AWG 2.0' && hasI1) {
+    steps.push({
+      title: `Шаг ${steps.length + 1}: Снизь MTU под CPS`,
+      text: `MTU=${mtu} работает, но CPS пакеты могут быть большими (до 1500 байт). Снизь до 1320 чтобы избежать фрагментации.`,
+      cmd: 'MTU = 1320',
+    });
+  }
+
+  return steps;
+}
 
 // ═══════════════════════════════════════════════════════════
 //  VERDICT
 // ═══════════════════════════════════════════════════════════
 function getVerdict(s) {
-  if(s>=88)return{l:'🛡 Максимальная защита',c:'#a855f7',bg:'#2e1a4e22',t:'AWG 2.0 с CPS мимикрием. Трафик неотличим от реального протокола. Высочайшая устойчивость к DPI и глубокому анализу.'};
-  if(s>=70)return{l:'✅ Хорошая защита',c:'#4ade80',bg:'#14532d11',t:'Надёжная конфигурация AWG. Есть параметры для улучшения — проверьте рекомендации.'};
-  if(s>=50)return{l:'⚠️ Средняя защита',c:'#f59e0b',bg:'#78350f11',t:'Базовая обфускация. Продвинутые DPI-системы могут идентифицировать трафик как AWG/WireGuard.'};
-  if(s>=30)return{l:'🔶 Слабая защита',c:'#f97316',bg:'#431a0311',t:'Минимальная обфускация. Трафик легко идентифицируется как WireGuard.'};
-  return     {l:'🔴 Стандартный WireGuard',c:'#ef4444',bg:'#450a0a22',t:'Нет обфускации. DPI немедленно идентифицирует и может заблокировать трафик.'};
+  if (s >= 88) return { l: '🛡 Максимальная защита', c: '#a855f7', bg: '#2e1a4e22', t: 'AWG 2.0 с полноценным CPS. Трафик неотличим от реального протокола. Высочайшая устойчивость к DPI.' };
+  if (s >= 70) return { l: '✅ Хорошая защита', c: '#4ade80', bg: '#14532d11', t: 'Надёжная конфигурация AWG. Есть параметры для улучшения — проверьте рекомендации ниже.' };
+  if (s >= 50) return { l: '⚠️ Средняя защита', c: '#f59e0b', bg: '#78350f11', t: 'Базовая обфускация. Продвинутые DPI могут идентифицировать как AWG/WireGuard.' };
+  if (s >= 30) return { l: '🔶 Слабая защита', c: '#f97316', bg: '#431a0311', t: 'Минимальная обфускация. Трафик легко идентифицируется.' };
+  return { l: '🔴 Стандартный WireGuard', c: '#ef4444', bg: '#450a0a22', t: 'Нет обфускации. DPI немедленно блокирует трафик.' };
 }
 
-function dpiLabel(d){
-  if(d<=20)return{t:'LOW',c:'#22c55e'};
-  if(d<=45)return{t:'MEDIUM',c:'#f59e0b'};
-  return{t:'HIGH',c:'#ef4444'};
+function dpiLabel(d) {
+  if (d <= 20) return { t: 'LOW', c: '#22c55e' };
+  if (d <= 45) return { t: 'MEDIUM', c: '#f59e0b' };
+  return { t: 'HIGH', c: '#ef4444' };
 }
 
-function esc(s){return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');}
-const icons={pass:'✓',warn:'!',fail:'✗',info:'i'};
+function esc(s) { return String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;'); }
+const icons = { pass: '✓', warn: '!', fail: '✗', info: 'i' };
 
-function renderMini(label,val,color,suffix=''){
-  return`<div class="mini-card"><div class="mini-label">${label}</div><div class="mini-val" style="color:${color}">${esc(String(val))}${suffix}</div></div>`;
+function renderMini(label, val, color, suffix = '') {
+  return `<div class="mini-card"><div class="mini-label">${label}</div><div class="mini-val" style="color:${color}">${esc(String(val))}${suffix}</div></div>`;
 }
 
 // ═══════════════════════════════════════════════════════════
@@ -783,102 +1161,140 @@ function renderMini(label,val,color,suffix=''){
 // ═══════════════════════════════════════════════════════════
 function analyze() {
   const raw = document.getElementById('configInput').value.trim();
-  const errEl      = document.getElementById('errorMsg');
-  const scoreEl    = document.getElementById('scoreSection');
-  const parsedEl   = document.getElementById('parsedParams');
-  const checksEl   = document.getElementById('checksOutput');
-  const autofixEl  = document.getElementById('autofixBox');
-  const fixList    = document.getElementById('autofixList');
-  const miniEl     = document.getElementById('miniScores');
-  const verBanner  = document.getElementById('versionBanner');
-  const verBadge   = document.getElementById('verBadge');
-  const verDesc    = document.getElementById('verDesc');
+  const errEl = document.getElementById('errorMsg');
+  const scoreEl = document.getElementById('scoreSection');
+  const parsedEl = document.getElementById('parsedParams');
+  const checksEl = document.getElementById('checksOutput');
+  const autofixEl = document.getElementById('autofixBox');
+  const fixList = document.getElementById('autofixList');
+  const miniEl = document.getElementById('miniScores');
+  const verBanner = document.getElementById('versionBanner');
+  const verBadge = document.getElementById('verBadge');
+  const verDesc = document.getElementById('verDesc');
+  const summaryEl = document.getElementById('summaryBox');
+  const summaryText = document.getElementById('summaryText');
+  const upgradeEl = document.getElementById('upgradeBox');
+  const upgradeList = document.getElementById('upgradeList');
 
-  errEl.style.display='none'; scoreEl.style.display='none';
-  parsedEl.style.display='none'; checksEl.innerHTML='';
-  autofixEl.style.display='none'; fixList.innerHTML=''; miniEl.innerHTML='';
-  verBanner.style.display='none';
+  // Reset
+  errEl.style.display = 'none';
+  scoreEl.style.display = 'none';
+  parsedEl.style.display = 'none';
+  checksEl.innerHTML = '';
+  autofixEl.style.display = 'none';
+  fixList.innerHTML = '';
+  miniEl.innerHTML = '';
+  verBanner.style.display = 'none';
+  summaryEl.style.display = 'none';
+  upgradeEl.style.display = 'none';
+  upgradeList.innerHTML = '';
 
-  if(!raw){errEl.textContent='Вставьте содержимое .conf файла AmneziaWG / WireGuard';errEl.style.display='block';return;}
+  if (!raw) {
+    errEl.textContent = 'Вставьте содержимое .conf файла AmneziaWG / WireGuard';
+    errEl.style.display = 'block';
+    return;
+  }
 
   let parsed;
   try { parsed = parseAWG(raw); }
-  catch(e) { errEl.textContent=e.message; errEl.style.display='block'; return; }
+  catch (e) { errEl.textContent = e.message; errEl.style.display = 'block'; return; }
 
   const { iface, peer } = parsed;
   const version = detectVersion(iface);
-  const checks  = runChecks(iface, peer, version);
-  const scores  = calcScores(checks, iface, version);
-  const fixes   = buildFixes(checks, iface, version);
-  
-  // DPI camouflage heuristic
-  const i1 = (iface.i1||'').toLowerCase();
+  const checks = runChecks(iface, peer, version);
+  const scores = calcScores(checks, iface, version);
+  const fixes = buildFixes(checks, iface, peer, version);
+  const upgrades = buildUpgradePath(iface, version);
+
+  // Camouflage
   let camouflage = 'LOW';
-  if(i1.includes('quic')||i1.includes('0xc0')) camouflage='HIGH';
-  else if(i1.includes('1603')||i1.includes('tls')) camouflage='HIGH';
-  else if(i1.includes('dns')||i1.includes('0001')) camouflage='MEDIUM';
+  if (version.protocol === 'QUIC' || version.protocol === 'TLS') camouflage = 'HIGH';
+  else if (version.protocol === 'DTLS' || version.protocol === 'SIP' || version.protocol === 'DNS') camouflage = 'MEDIUM';
 
   const verdict = getVerdict(scores.total);
-  const dpiL    = dpiLabel(scores.dpi);
+  const dpiL = dpiLabel(scores.dpi);
 
   // Version banner
-  verBanner.style.display='flex';
-  verBadge.textContent=version.ver;
-  verBadge.className='ver-badge '+version.cls;
-  verDesc.textContent=version.desc;
+  verBanner.style.display = 'flex';
+  verBadge.textContent = version.ver;
+  verBadge.className = 'ver-badge ' + version.cls;
+  let descHtml = esc(version.desc);
+  if (version.obfLevel) {
+    descHtml += ` <span class="ver-level">${esc(version.obfLevel)}</span>`;
+  }
+  verDesc.innerHTML = descHtml;
+
+  // Summary
+  summaryEl.style.display = 'block';
+  summaryText.innerHTML = buildSummary(iface, peer, version);
 
   // Score ring
-  scoreEl.style.display='block';
-  const rf=document.getElementById('ringFill');
-  document.getElementById('ringScore').textContent=scores.total;
-  document.getElementById('ringSub').textContent=version.ver;
-  rf.setAttribute('stroke-dasharray',`${(scores.total/100)*CIRC} ${CIRC}`);
-  rf.setAttribute('stroke',verdict.c);
-  const b=document.getElementById('verdictBadge');
-  b.textContent=verdict.l; b.style.cssText=`background:${verdict.bg};color:${verdict.c};border:1px solid ${verdict.c}44`;
-  document.getElementById('verdictText').textContent=verdict.t;
+  scoreEl.style.display = 'block';
+  const rf = document.getElementById('ringFill');
+  document.getElementById('ringScore').textContent = scores.total;
+  document.getElementById('ringSub').textContent = version.ver;
+  rf.setAttribute('stroke-dasharray', `${(scores.total / 100) * CIRC} ${CIRC}`);
+  rf.setAttribute('stroke', verdict.c);
+  const b = document.getElementById('verdictBadge');
+  b.textContent = verdict.l;
+  b.style.cssText = `background:${verdict.bg};color:${verdict.c};border:1px solid ${verdict.c}44`;
+  document.getElementById('verdictText').textContent = verdict.t;
 
   // Mini
-  miniEl.innerHTML=
-    renderMini('AWG Version',version.ver,'#a78bfa')+
-    renderMini('DPI Risk',dpiL.t,dpiL.c)+
-    renderMini('Stealth Score',scores.stealth,'#818cf8','%')+
-    renderMini('Security',scores.total,'#e2e8f0','%')+
-    renderMini('Camouflage',camouflage,'#60a5fa');
+  miniEl.innerHTML =
+    renderMini('AWG Version', version.ver, '#a78bfa') +
+    renderMini('DPI Risk', dpiL.t, dpiL.c) +
+    renderMini('Stealth', scores.stealth, '#818cf8', '%') +
+    renderMini('Security', scores.total, '#e2e8f0', '%') +
+    renderMini('Camouflage', camouflage, '#60a5fa');
 
-  // Fixes
-  if(fixes.length){
-    autofixEl.style.display='block';
-    fixList.innerHTML=fixes.map(f=>`<div class="fix-item">${esc(f)}</div>`).join('');
+  // Fixes — сортируем по severity
+  if (fixes.length) {
+    autofixEl.style.display = 'block';
+    const sevOrder = { crit: 0, high: 1, med: 2, low: 3 };
+    fixes.sort((a, b) => sevOrder[a.severity] - sevOrder[b.severity]);
+    const sevLabel = { crit: 'CRIT', high: 'HIGH', med: 'MED', low: 'LOW' };
+    fixList.innerHTML = fixes.map(f =>
+      `<div class="fix-item"><div><span class="fix-severity ${f.severity}">${sevLabel[f.severity]}</span>${f.text}</div></div>`
+    ).join('');
+  }
+
+  // Upgrade path
+  if (upgrades.length) {
+    upgradeEl.style.display = 'block';
+    upgradeList.innerHTML = upgrades.map(u =>
+      `<div class="upgrade-step"><strong>${esc(u.title)}</strong><br>${esc(u.text)}${u.cmd ? `<div class="cmd">${esc(u.cmd)}</div>` : ''}</div>`
+    ).join('');
   }
 
   // Parsed params
-  parsedEl.style.display='block';
-  const prows=[
-    ['privatekey', iface.privatekey?iface.privatekey.slice(0,16)+'…':'—'],
-    ['address',    iface.address||'—'],
-    ['dns',        iface.dns||'—'],
-    ['mtu',        iface.mtu||'—'],
-    ['jc/jmin/jmax', [iface.jc,iface.jmin,iface.jmax].map(v=>v??'—').join(' / ')],
-    ['s1/s2',      [iface.s1,iface.s2].map(v=>v??'—').join(' / ')],
-    ['s3/s4',      iface.s3||iface.s4?[iface.s3,iface.s4].map(v=>v??'—').join(' / '):'—'],
-    ['h1/h2/h3/h4',[iface.h1,iface.h2,iface.h3,iface.h4].map(v=>v??'—').join(' / ')],
-    ['i1',         iface.i1?iface.i1.slice(0,40)+(iface.i1.length>40?'…':''):'—'],
-    ['endpoint',   peer.endpoint||'—'],
-    ['publickey',  peer.publickey?peer.publickey.slice(0,16)+'…':'—'],
-    ['allowedips', peer.allowedips||'—'],
-    ['keepalive',  peer.persistentkeepalive||'—'],
-  ].filter(([,v])=>v&&v!=='—');
-  parsedEl.innerHTML=prows.map(([k,v])=>`<span>${k.padEnd(14)}</span>= ${esc(v)}`).join('\n');
+  parsedEl.style.display = 'block';
+  const prows = [
+    ['privatekey', iface.privatekey ? iface.privatekey.slice(0, 16) + '…' : '—'],
+    ['address', iface.address || '—'],
+    ['dns', iface.dns || '—'],
+    ['mtu', iface.mtu || '—'],
+    ['jc/jmin/jmax', [iface.jc, iface.jmin, iface.jmax].map(v => v ?? '—').join(' / ')],
+    ['s1/s2', [iface.s1, iface.s2].map(v => v ?? '—').join(' / ')],
+    ['s3/s4', iface.s3 || iface.s4 ? [iface.s3, iface.s4].map(v => v ?? '—').join(' / ') : '—'],
+    ['h1/h2/h3/h4', [iface.h1, iface.h2, iface.h3, iface.h4].map(v => v ?? '—').join(' / ')],
+    ['i1', iface.i1 ? iface.i1.slice(0, 40) + (iface.i1.length > 40 ? '…' : '') : '—'],
+    ['i2-i5', ['i2','i3','i4','i5'].filter(k => iface[k]).length + ' шт' || '—'],
+    ['endpoint', peer.endpoint || '—'],
+    ['publickey', peer.publickey ? peer.publickey.slice(0, 16) + '…' : '—'],
+    ['allowedips', peer.allowedips || '—'],
+    ['keepalive', peer.persistentkeepalive || '—'],
+  ].filter(([, v]) => v && v !== '—');
+  parsedEl.innerHTML = prows.map(([k, v]) => `<span>${k.padEnd(14)}</span>= ${esc(v)}`).join('\n');
 
   // Checks
-  const cats=[...new Set(checks.map(c=>c.cat))];
-  cats.forEach(cat=>{
-    checksEl.innerHTML+=`<div class="section-title">${cat}</div><div class="checks-grid">`;
-    checks.filter(c=>c.cat===cat&&c.max>=0).forEach(c=>{
-      checksEl.innerHTML+=`
+  const cats = [...new Set(checks.map(c => c.cat))];
+  cats.forEach(cat => {
+    checksEl.innerHTML += `<div class="section-title">${cat}</div><div class="checks-grid">`;
+    checks.filter(c => c.cat === cat && c.max >= 0).forEach(c => {
+      checksEl.innerHTML += `
         <div class="check-item ${c.status}">
-          <div class="check-icon">${icons[c.status]||'i'}</div>
+          <div class="check-icon">${icons[c.status] || 'i'}</div>
           <div class="check-body">
             <div class="check-title">${c.title}</div>
             <div class="check-value">${esc(c.value)}</div>
@@ -887,45 +1303,42 @@ function analyze() {
           <div class="check-weight">${c.pts}/${c.max}</div>
         </div>`;
     });
-    checksEl.innerHTML+='</div>';
+    checksEl.innerHTML += '</div>';
   });
 }
 
-function loadFile(e){
-  const file=e.target.files[0]; if(!file) return;
-  const r=new FileReader();
-  r.onload=ev=>{document.getElementById('configInput').value=ev.target.result.trim();analyze();};
+function loadFile(e) {
+  const file = e.target.files[0]; if (!file) return;
+  const r = new FileReader();
+  r.onload = ev => { document.getElementById('configInput').value = ev.target.result.trim(); analyze(); };
   r.readAsText(file);
-  e.target.value='';
+  e.target.value = '';
 }
-function clearAll(){
-  document.getElementById('configInput').value='';
-  ['errorMsg','scoreSection','parsedParams','autofixBox','versionBanner'].forEach(id=>{
-    document.getElementById(id).style.display='none';
+function clearAll() {
+  document.getElementById('configInput').value = '';
+  ['errorMsg', 'scoreSection', 'parsedParams', 'autofixBox', 'versionBanner', 'summaryBox', 'upgradeBox'].forEach(id => {
+    document.getElementById(id).style.display = 'none';
   });
-  document.getElementById('checksOutput').innerHTML='';
+  document.getElementById('checksOutput').innerHTML = '';
 }
 
 // Drag & drop
-const dz=document.getElementById('dropZone');
-dz.addEventListener('dragover',e=>{e.preventDefault();dz.classList.add('dragover');});
-dz.addEventListener('dragleave',()=>dz.classList.remove('dragover'));
-dz.addEventListener('drop',e=>{
+const dz = document.getElementById('dropZone');
+dz.addEventListener('dragover', e => { e.preventDefault(); dz.classList.add('dragover'); });
+dz.addEventListener('dragleave', () => dz.classList.remove('dragover'));
+dz.addEventListener('drop', e => {
   e.preventDefault(); dz.classList.remove('dragover');
-  const file=e.dataTransfer.files[0]; if(!file) return;
-  const r=new FileReader();
-  r.onload=ev=>{document.getElementById('configInput').value=ev.target.result.trim();analyze();};
+  const file = e.dataTransfer.files[0]; if (!file) return;
+  const r = new FileReader();
+  r.onload = ev => { document.getElementById('configInput').value = ev.target.result.trim(); analyze(); };
   r.readAsText(file);
 });
 
-document.addEventListener('keydown',e=>{if(e.ctrlKey&&e.key==='Enter')analyze();});
+document.addEventListener('keydown', e => { if (e.ctrlKey && e.key === 'Enter') analyze(); });
 
 // Theme toggle
 const themeBtn = document.getElementById('themeToggle');
-themeBtn.addEventListener('click',()=>{
-  document.body.classList.toggle('light');
-});
-
+themeBtn.addEventListener('click', () => { document.body.classList.toggle('light'); });
 </script>
 </body>
 </html>
