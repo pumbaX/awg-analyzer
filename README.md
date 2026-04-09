@@ -123,9 +123,19 @@ Ctrl + Enter → быстрый анализ
 - [AmneziaWG Architect](https://architect.vai-rice.space/) — веб-генератор обфускации
 
 ---
+## 💰 Поддержать
+
+**Boosty:** https://boosty.to/awgtoolza/donate
+
+| Сеть | Адрес |
+|---|---|
+| USDT TRC20 | `TN2rQAsGNHQr8wnneKRD14UMX629D2Ca5q` |
+| USDT ERC20 | `0x721845234eeC44e0a9BaE78402965828C1bc6c57` |
+| USDT TON | `UQCwj-RY2a4BH7sIDDeLb77XRaPDq0mb1FVwyC4UaOGbLMYy` |
+| TON | `UQCdQtJO4CF0Lyeb93X2zdeWeAcDJ-ieBC3AaL7LIqWfMBg3` |
+
+---
 
 License
 
 MIT
-
-## 💰 Поддержка проекта:USDT TRC20:TN2rQAsGNHQr8wnneKRD14UMX629D2Ca5q TON:UQCdQtJO4CF0Lyeb93X2zdeWeAcDJ-ieBC3AaL7LIqWfMBg
