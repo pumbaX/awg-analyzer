@@ -615,58 +615,50 @@ function runChecks(iface, peer, version) {
 
   // ── JUNK PACKETS ────────────────────────────────────────
   const hasJc = Jc !== null;
-  push('Junk-пакеты', 'Jc (количество)', !hasJc ? 'fail' : Jc === 0 ? 'warn' : Jc >= 4 && Jc <= 12 ? 'pass' : Jc >= 1 && Jc <= 128 ? 'warn' : 'warn',
+  push('Junk-пакеты', 'Jc (количество)', !hasJc ? 'fail' : Jc === 0 ? 'warn' : Jc >= 1 && Jc <= 128 ? 'pass' : 'fail',
     hasJc ? String(Jc) : '(не задан)',
     !hasJc ? 'Jc не задан — нет junk-пакетов, handshake детектируется по размеру' :
       Jc === 0 ? 'Jc=0 — junk-пакеты отключены' :
-      Jc >= 4 && Jc <= 12 ? `Jc=${Jc} — в recommended диапазоне 4-12 (мануал AmneziaWG) ✓` :
-      Jc > 12 && Jc <= 128 ? `Jc=${Jc} — допустимо (1-128), но вне recommended 4-12` :
-      Jc > 128 ? `Jc=${Jc} — превышает лимит мануала (max 128)` :
-      `Jc=${Jc} — меньше recommended 4-12 (мануал AmneziaWG)`,
-    !hasJc ? 0 : Jc === 0 ? 0 : Jc >= 4 && Jc <= 12 ? 8 : Jc >= 1 && Jc <= 128 ? 4 : 0, 8);
+      Jc >= 1 && Jc <= 128 ? `Jc=${Jc} — валидно (1 ≤ Jc ≤ 128) ✓` :
+      `Jc=${Jc} — вне допустимого диапазона 1-128 (мануал AmneziaWG)`,
+    !hasJc ? 0 : Jc === 0 ? 0 : Jc >= 1 && Jc <= 128 ? 8 : 0, 8);
 
   if (hasJc && Jc > 0) {
     const jminOk = Jmin !== null && Jmin >= 1;
     const jmaxOk = Jmax !== null && Jmax > Jmin && Jmax <= 1280;
     const jrangeOk = jminOk && jmaxOk;
-    const jrecommended = Jmin !== null && Jmax !== null && Jmin >= 3 && Jmin <= 15 && Jmax >= 50 && Jmax <= 120;
 
-    push('Junk-пакеты', 'Jmin/Jmax (диапазон размеров)', jrangeOk && jrecommended ? 'pass' : jrangeOk ? 'warn' : 'fail',
+    push('Junk-пакеты', 'Jmin/Jmax (диапазон размеров)', jrangeOk ? 'pass' : 'fail',
       Jmin !== null && Jmax !== null ? `${Jmin}–${Jmax}` : '(не задан)',
       Jmin === null || Jmax === null ? 'Jmin/Jmax не заданы — нужны при Jc>0' :
       Jmax > 1280 ? `Jmax=${Jmax} должен быть ≤ 1280 (мануал AmneziaWG)` :
       Jmax <= Jmin ? `Jmax=${Jmax} должен быть > Jmin=${Jmin}` :
-      jrecommended ? `Jmin=${Jmin} Jmax=${Jmax} — в recommended диапазоне (Jmin≈8, Jmax≈80) ✓` :
-      `Jmin=${Jmin} Jmax=${Jmax} — валидно, но отличается от recommended (Jmin≈8, Jmax≈80)`,
-      jrangeOk && jrecommended ? 6 : jrangeOk ? 4 : 0, 6);
+      `Jmin=${Jmin} Jmax=${Jmax} — валидно (Jmin < Jmax ≤ 1280) ✓`,
+      jrangeOk ? 6 : 0, 6);
   }
 
   // ── S1/S2 — AWG 1.5+ ─────────────────────────────────────
-  // Мануал: S1 ≤ 1132, S2 ≤ 1188, recommended 15-150
+  // Мануал: S1 ≤ 1132, S2 ≤ 1188
   const hasS1 = S1 !== null, hasS2 = S2 !== null;
   const s1Valid = hasS1 && S1 >= 0 && S1 <= 1132;
   const s2Valid = hasS2 && S2 >= 0 && S2 <= 1188;
-  const s1Recommended = hasS1 && S1 >= 15 && S1 <= 150;
-  const s2Recommended = hasS2 && S2 >= 15 && S2 <= 150;
   const s1s2Conflict = hasS1 && hasS2 && (S1 + 56 === S2);
 
-  push('Handshake Padding (S1/S2)', 'S1 — Init prefix', !hasS1 ? 'info' : S1 === 0 ? 'warn' : s1Recommended ? 'pass' : s1Valid ? 'warn' : 'fail',
+  push('Handshake Padding (S1/S2)', 'S1 — Init prefix', !hasS1 ? 'info' : S1 === 0 ? 'warn' : s1Valid ? 'pass' : 'fail',
     hasS1 ? String(S1) : '(не задан)',
     !hasS1 ? 'S1 не задан — доступен в AWG 1.5 / 2.0' :
     S1 === 0 ? 'S1=0 — рандомный префикс Init-пакета отключён' :
-    s1Recommended ? `S1=${S1} — в recommended диапазоне 15-150 ✓` :
-    s1Valid ? `S1=${S1} — валидно (≤1132), но вне recommended 15-150` :
+    s1Valid ? `S1=${S1} — валидно (S1 ≤ 1132) ✓` :
     `S1=${S1} — превышает лимит мануала (max 1132)`,
-    !hasS1 ? 1 : S1 === 0 ? 0 : s1Recommended ? 6 : s1Valid ? 4 : 0, 6);
+    !hasS1 ? 1 : S1 === 0 ? 0 : s1Valid ? 6 : 0, 6);
 
-  push('Handshake Padding (S1/S2)', 'S2 — Response prefix', !hasS2 ? 'info' : S2 === 0 ? 'warn' : s2Recommended ? 'pass' : s2Valid ? 'warn' : 'fail',
+  push('Handshake Padding (S1/S2)', 'S2 — Response prefix', !hasS2 ? 'info' : S2 === 0 ? 'warn' : s2Valid ? 'pass' : 'fail',
     hasS2 ? String(S2) : '(не задан)',
     !hasS2 ? 'S2 не задан — доступен в AWG 1.5 / 2.0' :
     S2 === 0 ? 'S2=0 — рандомный префикс Response-пакета отключён' :
-    s2Recommended ? `S2=${S2} — в recommended диапазоне 15-150 ✓` :
-    s2Valid ? `S2=${S2} — валидно (≤1188), но вне recommended 15-150` :
-    `S2=${S2} — превышает protocol limit 1188`,
-    !hasS2 ? 1 : S2 === 0 ? 0 : s2Recommended ? 6 : s2Valid ? 4 : 0, 6);
+    s2Valid ? `S2=${S2} — валидно (S2 ≤ 1188) ✓` :
+    `S2=${S2} — превышает лимит мануала (max 1188)`,
+    !hasS2 ? 1 : S2 === 0 ? 0 : s2Valid ? 6 : 0, 6);
 
   if (s1s2Conflict) {
     push('Handshake Padding (S1/S2)', '⚠️ S1+56 = S2 конфликт', 'fail', `S1=${S1} S2=${S2}`,
