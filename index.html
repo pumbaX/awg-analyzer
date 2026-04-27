@@ -148,17 +148,17 @@ PrivateKey = <base64>
 Address = 10.45.12.2/32
 DNS = 1.1.1.1, 1.0.0.1
 MTU = 1320
-Jc = 8
-Jmin = 8
-Jmax = 80
-S1 = 72
-S2 = 40
+Jc = 5
+Jmin = 128
+Jmax = 768
+S1 = 20
+S2 = 70
 S3 = 32
-S4 = 12
-H1 = 158274004-360618542
-H2 = 607302821-1024940239
-H3 = 1206090192-1471394501
-H4 = 1688276110-2056908608
+S4 = 8
+H1 = 1073741823-1073871823
+H2 = 2147483647-2147613647
+H3 = 3221225471-3221355471
+H4 = 4294967295-4294967295
 I1 = <b 0x1603030101210100011d0303...><r 999><rc 16><t>
 
 [Peer]
@@ -615,54 +615,55 @@ function runChecks(iface, peer, version) {
 
   // ── JUNK PACKETS ────────────────────────────────────────
   const hasJc = Jc !== null;
-  push('Junk-пакеты', 'Jc (количество)', !hasJc ? 'fail' : Jc === 0 ? 'warn' : Jc >= 1 && Jc <= 128 ? 'pass' : 'fail',
+  push('Junk-пакеты', 'Jc (количество)', !hasJc ? 'fail' : Jc === 0 ? 'warn' : Jc >= 3 && Jc <= 10 ? 'pass' : 'warn',
     hasJc ? String(Jc) : '(не задан)',
     !hasJc ? 'Jc не задан — нет junk-пакетов, handshake детектируется по размеру' :
       Jc === 0 ? 'Jc=0 — junk-пакеты отключены' :
-      Jc >= 1 && Jc <= 128 ? `Jc=${Jc} — валидно (1 ≤ Jc ≤ 128) ✓` :
-      `Jc=${Jc} — вне допустимого диапазона 1-128 (мануал AmneziaWG)`,
-    !hasJc ? 0 : Jc === 0 ? 0 : Jc >= 1 && Jc <= 128 ? 8 : 0, 8);
+      Jc >= 3 && Jc <= 10 ? `Jc=${Jc} — в рекомендуемом диапазоне 3-10 ✓` :
+      Jc > 10 ? `Jc=${Jc} — слишком много, создаёт ненужный трафик (рекомендуется 3-10)` :
+      `Jc=${Jc} — мало (рекомендуется 3-10)`,
+    !hasJc ? 0 : Jc === 0 ? 0 : Jc >= 3 && Jc <= 10 ? 8 : 4, 8);
 
   if (hasJc && Jc > 0) {
-    const jminOk = Jmin !== null && Jmin >= 1;
-    const jmaxOk = Jmax !== null && Jmax > Jmin && Jmax <= 1280;
-    const jrangeOk = jminOk && jmaxOk;
+    const jminOk = Jmin !== null && Jmin >= 10 && Jmin <= 500;
+    const jmaxOk = Jmax !== null && Jmax >= Jmin && Jmax <= 1280;
+    const jrangeOk = jminOk && jmaxOk && (Jmax - Jmin) >= 50;
 
-    push('Junk-пакеты', 'Jmin/Jmax (диапазон размеров)', jrangeOk ? 'pass' : 'fail',
+    push('Junk-пакеты', 'Jmin/Jmax (диапазон размеров)', jrangeOk ? 'pass' : jminOk && jmaxOk ? 'warn' : 'fail',
       Jmin !== null && Jmax !== null ? `${Jmin}–${Jmax}` : '(не задан)',
       Jmin === null || Jmax === null ? 'Jmin/Jmax не заданы — нужны при Jc>0' :
-      Jmax > 1280 ? `Jmax=${Jmax} должен быть ≤ 1280 (мануал AmneziaWG)` :
-      Jmax <= Jmin ? `Jmax=${Jmax} должен быть > Jmin=${Jmin}` :
-      `Jmin=${Jmin} Jmax=${Jmax} — валидно (Jmin < Jmax ≤ 1280) ✓`,
-      jrangeOk ? 6 : 0, 6);
+      !jmaxOk ? `Jmax=${Jmax} должен быть ≤ 1280 (MTU)` :
+      !jminOk ? `Jmin=${Jmin} вне диапазона 10-500` :
+      (Jmax - Jmin) < 50 ? `Диапазон ${Jmin}-${Jmax} слишком узкий — рекомендуется ≥50 (размеры предсказуемы)` :
+      `Jmin=${Jmin} Jmax=${Jmax} — хороший диапазон, размеры непредсказуемы`,
+      jrangeOk ? 6 : jminOk && jmaxOk ? 3 : 0, 6);
   }
 
   // ── S1/S2 — AWG 1.5+ ─────────────────────────────────────
-  // Мануал: S1 ≤ 1132, S2 ≤ 1188
   const hasS1 = S1 !== null, hasS2 = S2 !== null;
-  const s1Valid = hasS1 && S1 >= 0 && S1 <= 1132;
-  const s2Valid = hasS2 && S2 >= 0 && S2 <= 1188;
+  const s1Ok = hasS1 && S1 >= 0 && S1 <= 150;
+  const s2Ok = hasS2 && S2 >= 0 && S2 <= 1188; // AWG 2.0 protocol limit
   const s1s2Conflict = hasS1 && hasS2 && (S1 + 56 === S2);
 
-  push('Handshake Padding (S1/S2)', 'S1 — Init prefix', !hasS1 ? 'info' : S1 === 0 ? 'warn' : s1Valid ? 'pass' : 'fail',
+  push('Handshake Padding (S1/S2)', 'S1 — Init prefix', !hasS1 ? 'info' : S1 === 0 ? 'warn' : s1Ok ? 'pass' : 'warn',
     hasS1 ? String(S1) : '(не задан)',
     !hasS1 ? 'S1 не задан — доступен в AWG 1.5 / 2.0' :
     S1 === 0 ? 'S1=0 — рандомный префикс Init-пакета отключён' :
-    s1Valid ? `S1=${S1} — валидно (S1 ≤ 1132) ✓` :
-    `S1=${S1} — превышает лимит мануала (max 1132)`,
-    !hasS1 ? 1 : S1 === 0 ? 0 : s1Valid ? 6 : 0, 6);
+    s1Ok ? `S1=${S1} — корректно ✓` :
+    `S1=${S1} — вне диапазона 0-150`,
+    !hasS1 ? 1 : S1 === 0 ? 0 : s1Ok ? 6 : 3, 6);
 
-  push('Handshake Padding (S1/S2)', 'S2 — Response prefix', !hasS2 ? 'info' : S2 === 0 ? 'warn' : s2Valid ? 'pass' : 'fail',
+  push('Handshake Padding (S1/S2)', 'S2 — Response prefix', !hasS2 ? 'info' : S2 === 0 ? 'warn' : s2Ok ? 'pass' : 'warn',
     hasS2 ? String(S2) : '(не задан)',
     !hasS2 ? 'S2 не задан — доступен в AWG 1.5 / 2.0' :
     S2 === 0 ? 'S2=0 — рандомный префикс Response-пакета отключён' :
-    s2Valid ? `S2=${S2} — валидно (S2 ≤ 1188) ✓` :
-    `S2=${S2} — превышает лимит мануала (max 1188)`,
-    !hasS2 ? 1 : S2 === 0 ? 0 : s2Valid ? 6 : 0, 6);
+    s2Ok ? `S2=${S2} — корректно (AWG 2.0 лимит 1188 байт) ✓` :
+    `S2=${S2} — превышает protocol limit 1188`,
+    !hasS2 ? 1 : S2 === 0 ? 0 : s2Ok ? 6 : 3, 6);
 
   if (s1s2Conflict) {
     push('Handshake Padding (S1/S2)', '⚠️ S1+56 = S2 конфликт', 'fail', `S1=${S1} S2=${S2}`,
-      `S1+56=${S1 + 56} совпадает с S2=${S2} — правило мануала: S1+56 ≠ S2. Пакеты становятся предсказуемыми.`, 0, 0);
+      `S1+56=${S1 + 56} совпадает с S2=${S2} — правило AWG: S1+56 ≠ S2. Это делает пакеты предсказуемыми!`, 0, 0);
   }
 
   // S3/S4 — только AWG 2.0
@@ -697,39 +698,44 @@ function runChecks(iface, peer, version) {
   const uniqueH = hasAllH && new Set(startVals).size === 4;
   const hDisplayVal = hasAllH ? allHraw.map(h => h.raw).join(' / ') : '(не заданы)';
 
-  // Проверка H диапазонов по sub-квадрантам в recommended range [5..2^31-1]
-  // Мануал: H1-H4 recommended 5 ≤ H ≤ 2147483647
-  // Sub-Q1: [5 .. 2^29-1]            (5 .. 536,870,911)       H1
-  // Sub-Q2: [2^29 .. 2^30-1]         (536,870,912 .. 1,073,741,823)  H2
-  // Sub-Q3: [2^30 .. 3*2^29-1]       (1,073,741,824 .. 1,610,612,735) H3
-  // Sub-Q4: [3*2^29 .. 2^31-1]       (1,610,612,736 .. 2,147,483,647) H4
-  const MANUAL_MAX = 2147483647; // 2^31 - 1
-  let quadrantsOk = true;
-  let overlap = false;
-  let allWithinManual = true;
+  // Проверки для диапазонов (AWG 2.0):
+  //   1. Непересечение — КРИТИЧНО (иначе сервер/клиент рассинхронизируются)
+  //   2. Распределение по квадрантам uint32 — БОНУС (идеальное, но не обязательное)
+  //   3. Ширина диапазонов — warning если узкие
+  let rangesOverlap = false;
+  let rangesSorted = true;      // Все H идут по возрастанию?
+  let quadrantPerfect = true;   // Каждый H в своём квадранте?
+  let rangesSpread = 0;         // Сколько квадрантов покрыто (1-4)
+
   if (hasAllH && hHaveRanges) {
-    const SQ = 536870912; // 2^29
-    const subQuadrantBounds = [
-      [5, SQ - 1],                  // Sub-Q1
-      [SQ, 2*SQ - 1],               // Sub-Q2
-      [2*SQ, 3*SQ - 1],             // Sub-Q3
-      [3*SQ, MANUAL_MAX]            // Sub-Q4
-    ];
+    const Q = 1073741823;
+    const quadrantBounds = [[0, Q], [Q + 1, 2*Q], [2*Q + 1, 3*Q], [3*Q + 1, 4*Q + 3]];
+
+    // Сортированы ли диапазоны по возрастанию? (необходимое условие непересечения)
+    const sortedRaw = [...allHraw].sort((a, b) => a.start - b.start);
+    rangesSorted = allHraw.every((h, i) => h.start === sortedRaw[i].start);
+
+    // Пересечения
+    for (let i = 0; i < 3; i++) {
+      if (allHraw[i].end >= allHraw[i+1].start) { rangesOverlap = true; break; }
+    }
+
+    // Идеальное квадрантное распределение (каждый H в своём квадранте по порядку)
     for (let i = 0; i < 4; i++) {
       const h = allHraw[i];
-      const [qMin, qMax] = subQuadrantBounds[i];
-      if (h.end > MANUAL_MAX) allWithinManual = false;
-      if (h.start < qMin || h.end > qMax) { quadrantsOk = false; }
+      const [qMin, qMax] = quadrantBounds[i];
+      if (h.start < qMin || h.end > qMax) { quadrantPerfect = false; break; }
     }
-    // Проверка пересечения между H
-    for (let i = 0; i < 3; i++) {
-      if (allHraw[i].end >= allHraw[i+1].start) { overlap = true; break; }
-    }
-  } else if (hasAllH) {
-    // Одиночные числа — проверяем только что в пределах мануального лимита
+
+    // Сколько уникальных квадрантов реально покрыто всеми диапазонами
+    const coveredQuadrants = new Set();
     for (const h of allHraw) {
-      if (h.end > MANUAL_MAX) allWithinManual = false;
+      for (let q = 0; q < 4; q++) {
+        const [qMin, qMax] = quadrantBounds[q];
+        if (h.start >= qMin && h.start <= qMax) { coveredQuadrants.add(q); break; }
+      }
     }
+    rangesSpread = coveredQuadrants.size;
   }
 
   let hStatus, hPts, hDetail;
@@ -742,18 +748,18 @@ function runChecks(iface, peer, version) {
   } else if (!uniqueH) {
     hStatus = 'fail'; hPts = 0;
     hDetail = 'H1-H4 содержат повторяющиеся значения — конфигурация невалидна';
-  } else if (!allWithinManual) {
-    hStatus = 'warn'; hPts = 6;
-    hDetail = 'H1-H4 выходят за recommended лимит мануала (5 ≤ H ≤ 2^31-1). Windows клиент может не принять значения > 2^31-1.';
-  } else if (hHaveRanges && overlap) {
+  } else if (hHaveRanges && rangesOverlap) {
     hStatus = 'fail'; hPts = 0;
     hDetail = 'H1-H4 диапазоны пересекаются — сервер и клиент могут рассинхронизироваться!';
-  } else if (hHaveRanges && quadrantsOk) {
+  } else if (hHaveRanges && quadrantPerfect) {
     hStatus = 'pass'; hPts = 12;
-    hDetail = 'H1-H4 в sub-квадрантах recommended диапазона [5..2^31-1] мануала AmneziaWG — максимальная непредсказуемость, Windows клиент примет ✓';
+    hDetail = 'H1-H4 заданы диапазонами строго по квадрантам uint32 (Q=2^30) — идеальное распределение AWG 2.0 ✓';
+  } else if (hHaveRanges && rangesSpread === 4) {
+    hStatus = 'pass'; hPts = 11;
+    hDetail = `H1-H4 диапазоны валидны, непересекающиеся, покрывают все 4 квадранта uint32 (но не строго по порядку). Это корректно для AWG 2.0 ✓`;
   } else if (hHaveRanges) {
     hStatus = 'pass'; hPts = 10;
-    hDetail = 'H1-H4 заданы диапазонами в recommended лимите, уникальны — AWG 2.0 режим ✓';
+    hDetail = `H1-H4 диапазоны валидны и не пересекаются, но распределены только по ${rangesSpread} из 4 квадрантов uint32. Работает, но для лучшего распределения энтропии используй строгие квадранты.`;
   } else {
     hStatus = 'pass'; hPts = 10;
     hDetail = 'H1-H4 уникальны — сигнатура handshake скрыта ✓';
@@ -761,20 +767,22 @@ function runChecks(iface, peer, version) {
 
   push('Magic Headers (H1-H4)', 'H1-H4', hStatus, hDisplayVal, hDetail, hPts, 12);
 
-  // Ширина диапазонов — адаптирована под sub-квадранты (~2^29 каждый)
-  // Узкий теперь <1000 (минимум по мануалу), хороший ≥ 1000
+  // Ширина диапазонов
   if (hHaveRanges) {
     const narrowRanges = allHraw.filter(h => h.isRange && h.width < 1000);
     if (narrowRanges.length) {
       push('Magic Headers (H1-H4)', 'Ширина диапазонов H', 'warn',
         narrowRanges.map(h => `${h.raw} (ширина ${h.width})`).join(', '),
-        'Узкие диапазоны H (<1000) уменьшают энтропию. Рекомендуется ширина ≥1000.', 0, 0);
+        'Узкие диапазоны H (<1000) уменьшают энтропию. Рекомендуется ширина ≥30000 для AWG 2.0.', 0, 0);
     }
   }
 
   // ── CPS / I1-I5 ──────────────────────────────────────────
   const i1Parsed = I1 ? parseI1(I1) : null;
   const hasI1 = !!I1;
+  // DNS профиль: I1 = <r 2><b 0x01...> — TXID первый, это корректно
+  const i1IsDnsPattern = hasI1 && i1Parsed.firstTag === 'r' &&
+    I1.includes('<r 2>') && I1.includes('<b 0x01');
 
   if (!hasI1) {
     push('CPS Мимикрия (I1-I5)', 'I1 — Protocol Signature', 'info', '(не задан)',
@@ -782,10 +790,15 @@ function runChecks(iface, peer, version) {
       0, 15);
   } else {
     // Критичные проверки I1
-    if (!i1Parsed.startsWith_b) {
+    if (!i1Parsed.startsWith_b && !i1IsDnsPattern) {
       push('CPS Мимикрия (I1-I5)', '🔴 I1 структура', 'fail', `первый тег: <${i1Parsed.firstTag}>`,
         'I1 НЕ начинается с <b 0x...> — парсер amneziawg-go на клиенте ломает handshake. Переделай так чтобы первый тег был <b 0x...>.',
         0, 15);
+    } else if (i1IsDnsPattern) {
+      push('CPS Мимикрия (I1-I5)', 'I1 — Protocol Signature', 'pass',
+        I1.slice(0, 50) + (I1.length > 50 ? '…' : ''),
+        'DNS профиль: <r 2> (TXID рандомный) + <b 0x01...> (DNS Query). Структура корректна — TXID всегда первый в DNS wire format. ✓',
+        15, 15);
     } else if (i1Parsed.hasC) {
       push('CPS Мимикрия (I1-I5)', '⚠️ Устаревший тег <c>', 'fail', 'обнаружен',
         'Тег <c> вызывает ErrorCode 1000 на старых клиентах AmneziaVPN. Убери его.',
@@ -945,7 +958,10 @@ function calcScores(checks, iface, version) {
   const h1 = parseHRange(iface, 'h1');
   if (h1 && h1.isRange) dpi -= 8;
 
-  const hasValidI1 = iface.i1 && parseI1(iface.i1).startsWith_b;
+  const _i1raw = iface.i1 || '';
+  const _i1p = _i1raw ? parseI1(_i1raw) : null;
+  const _i1IsDns = _i1p && _i1p.firstTag === 'r' && _i1raw.includes('<r 2>') && _i1raw.includes('<b 0x01');
+  const hasValidI1 = _i1raw && (_i1p.startsWith_b || _i1IsDns);
   if (hasValidI1) dpi -= 12;
 
   const iCount = ['i1','i2','i3','i4','i5'].filter(k => iface[k]).length;
@@ -975,7 +991,10 @@ function buildFixes(checks, iface, peer, version) {
   // === CRIT (ломает работу) ===
   if (iface.i1) {
     const i1p = parseI1(iface.i1);
-    if (!i1p.startsWith_b) {
+    const i1IsDns = i1p.firstTag === 'r'
+      && iface.i1.includes('<r 2>')
+      && iface.i1.includes('<b 0x01');
+    if (!i1p.startsWith_b && !i1IsDns) {
       add('crit', 'I1 должен начинаться с <code class="fix-code">&lt;b 0x...&gt;</code> — иначе handshake ломается на Android/Keenetic.');
     }
     if (i1p.hasC) {
@@ -1135,7 +1154,7 @@ function buildUpgradePath(iface, version) {
     steps.push({
       title: `Шаг ${steps.length + 1}: Переделай H1-H4 в диапазоны`,
       text: 'H1-H4 как одиночные числа работают, но каждое соединение использует одно и то же значение. DPI может их запомнить. Диапазоны дают уникальный magic каждый handshake.',
-      cmd: '# Мануал AmneziaWG: recommended 5 ≤ H ≤ 2^31-1\n# Sub-квадранты внутри лимита:\nH1 = 100000000-450000000        # Sub-Q1: 5 .. 2^29-1\nH2 = 700000000-1050000000       # Sub-Q2: 2^29 .. 2^30-1\nH3 = 1200000000-1550000000      # Sub-Q3: 2^30 .. 3*2^29-1\nH4 = 1800000000-2100000000      # Sub-Q4: 3*2^29 .. 2^31-1',
+      cmd: '# Распредели по квадрантам uint32:\nH1 = 100000000-100100000    # 0..Q\nH2 = 1200000000-1200100000  # Q..2Q\nH3 = 2300000000-2300100000  # 2Q..3Q\nH4 = 3400000000-3400100000  # 3Q..4Q',
     });
   }
 
@@ -1143,8 +1162,8 @@ function buildUpgradePath(iface, version) {
   const mtu = getInt(iface, 'mtu', null);
   if (mtu !== null && mtu > 1340 && version.ver === 'AWG 2.0' && hasI1) {
     steps.push({
-      title: `Шаг ${steps.length + 1}: Снизь MTU под CPS`,
-      text: `MTU=${mtu} работает, но CPS пакеты могут быть большими (до 1500 байт). Снизь до 1320 чтобы избежать фрагментации.`,
+      title: `Шаг ${steps.length + 1}: Оптимизируй MTU под AWG 2.0`,
+      text: `MTU=${mtu} работает нормально. Для AWG 2.0 + CPS рекомендуется 1280-1340 — это снижает вероятность фрагментации UDP пакетов на некоторых провайдерах.`,
       cmd: 'MTU = 1320',
     });
   }
