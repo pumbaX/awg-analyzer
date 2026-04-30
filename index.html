@@ -625,7 +625,7 @@ function runChecks(iface, peer, version) {
     !hasJc ? 0 : Jc === 0 ? 0 : Jc >= 3 && Jc <= 15 ? 8 : 4, 8);
 
   if (hasJc && Jc > 0) {
-    const jminOk = Jmin !== null && Jmin >= 10 && Jmin <= 500;
+    const jminOk = Jmin !== null && Jmin >= 5 && Jmin <= 1024;
     const jmaxOk = Jmax !== null && Jmax >= Jmin && Jmax <= 1280;
     const jrangeOk = jminOk && jmaxOk && (Jmax - Jmin) >= 50;
 
@@ -633,7 +633,7 @@ function runChecks(iface, peer, version) {
       Jmin !== null && Jmax !== null ? `${Jmin}–${Jmax}` : '(не задан)',
       Jmin === null || Jmax === null ? 'Jmin/Jmax не заданы — нужны при Jc>0' :
       !jmaxOk ? `Jmax=${Jmax} должен быть ≤ 1280 (MTU)` :
-      !jminOk ? `Jmin=${Jmin} вне диапазона 10-500` :
+      !jminOk ? `Jmin=${Jmin} вне диапазона 5-1024` :
       (Jmax - Jmin) < 50 ? `Диапазон ${Jmin}-${Jmax} слишком узкий — рекомендуется ≥50 (размеры предсказуемы)` :
       `Jmin=${Jmin} Jmax=${Jmax} — хороший диапазон, размеры непредсказуемы`,
       jrangeOk ? 6 : jminOk && jmaxOk ? 3 : 0, 6);
