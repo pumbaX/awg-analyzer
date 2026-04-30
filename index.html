@@ -615,14 +615,14 @@ function runChecks(iface, peer, version) {
 
   // ── JUNK PACKETS ────────────────────────────────────────
   const hasJc = Jc !== null;
-  push('Junk-пакеты', 'Jc (количество)', !hasJc ? 'fail' : Jc === 0 ? 'warn' : Jc >= 3 && Jc <= 10 ? 'pass' : 'warn',
+  push('Junk-пакеты', 'Jc (количество)', !hasJc ? 'fail' : Jc === 0 ? 'warn' : Jc >= 3 && Jc <= 15 ? 'pass' : 'warn',
     hasJc ? String(Jc) : '(не задан)',
     !hasJc ? 'Jc не задан — нет junk-пакетов, handshake детектируется по размеру' :
       Jc === 0 ? 'Jc=0 — junk-пакеты отключены' :
-      Jc >= 3 && Jc <= 10 ? `Jc=${Jc} — в рекомендуемом диапазоне 3-10 ✓` :
-      Jc > 10 ? `Jc=${Jc} — слишком много, создаёт ненужный трафик (рекомендуется 3-10)` :
-      `Jc=${Jc} — мало (рекомендуется 3-10)`,
-    !hasJc ? 0 : Jc === 0 ? 0 : Jc >= 3 && Jc <= 10 ? 8 : 4, 8);
+      Jc >= 3 && Jc <= 15 ? `Jc=${Jc} — в рекомендуемом диапазоне 3-15 ✓` :
+      Jc > 15 ? `Jc=${Jc} — слишком много, создаёт ненужный трафик (рекомендуется 3-15)` :
+      `Jc=${Jc} — мало (рекомендуется 3-15)`,
+    !hasJc ? 0 : Jc === 0 ? 0 : Jc >= 3 && Jc <= 15 ? 8 : 4, 8);
 
   if (hasJc && Jc > 0) {
     const jminOk = Jmin !== null && Jmin >= 10 && Jmin <= 500;
@@ -1051,10 +1051,10 @@ function buildFixes(checks, iface, peer, version) {
   }
 
   if (Jc !== null && Jc < 3 && Jc > 0) {
-    add('med', `Jc=${Jc} — мало. Увеличь до 3-10 для лучшей обфускации.`);
+    add('med', `Jc=${Jc} — мало. Увеличь до 3-15 для лучшей обфускации.`);
   }
   if (Jc === 0 || Jc === null) {
-    add('med', 'Jc = 0 или не задан — junk-пакеты отключены. Рекомендуется Jc = 5.');
+    add('med', 'Jc = 0 или не задан — junk-пакеты отключены. Рекомендуется Jc = 5-12.');
   }
 
   if (Jmin !== null && Jmax !== null && (Jmax - Jmin) < 50) {
