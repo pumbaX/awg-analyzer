@@ -44,6 +44,8 @@ textarea::placeholder{color:#1e3a5f;}
 .summary-text{color:#cbd5e1;font-size:.88rem;line-height:1.6;}
 .summary-text strong{color:#a78bfa;}
 .summary-text .pill{display:inline-block;background:#1e1b4b;color:#c4b5fd;padding:1px 8px;border-radius:6px;font-family:monospace;font-size:.78rem;margin:0 2px;}
+.summary-line{margin:4px 0;}
+.summary-line + .summary-line{padding-top:4px;border-top:1px dashed #1e293b;}
 
 /* Score area */
 .score-section{display:none;background:#0d1526;border:1px solid #1e293b;border-radius:12px;padding:24px;margin-bottom:16px;}
@@ -129,6 +131,7 @@ body.light .section-title::after{background:#cbd5e1;}
 body.light #ringScore,body.light .ring-svg text{fill:#0f172a !important;}
 body.light #ringSub{fill:#475569 !important;}
 body.light .summary-text{color:#334155;}
+body.light .summary-line + .summary-line{border-top-color:#e2e8f0;}
 body.light .upgrade-step{color:#475569;border-color:#e2e8f0;}
 body.light .check-title{color:#0f172a;}
 </style>
@@ -345,8 +348,13 @@ function parseI1(i1) {
   result.firstTag = result.tags[0].tag;
   result.startsWith_b = result.firstTag === 'b';
 
-  if (!result.startsWith_b) {
-    result.errors.push('первый тег должен быть <b 0x...> — иначе парсер amneziawg-go ломается');
+  // Валидно: <b ...> сразу, либо <r N><b ...> (рандомизация префикса).
+  // amneziawg-go нормально парсит <r N> пока N < 1000 (лимит проверяется
+  // отдельным правилом ниже). Невалидно: всё остальное (<t>, <c>, <rc> в начале).
+  const secondTag = result.tags[1] && result.tags[1].tag;
+  const isRThenB = result.firstTag === 'r' && secondTag === 'b';
+  if (!result.startsWith_b && !isRThenB) {
+    result.errors.push('первый тег должен быть <b 0x...> (или <r N><b ...> для рандомизации префикса) — иначе парсер amneziawg-go ломается');
   }
 
   // Лимит <r N> — должно быть < 1000
@@ -360,8 +368,19 @@ function parseI1(i1) {
     result.errors.push('тег <c> устарел — вызывает ErrorCode 1000 на старых клиентах AmneziaVPN');
   }
 
-  // Детект протокола по hex
-  result.protocol = detectI1Protocol(result.hexData);
+  // Детект протокола по hex (с учётом <r N> префикса перед <b>)
+  // Если перед <b> были теги <r N> — hex в <b> начинается со смещения N байт
+  // в реальном пакете, поэтому надо проверять сигнатуры со сдвигом.
+  let rPrefixBytes = 0;
+  for (const t of result.tags) {
+    if (t.tag === 'b') break;
+    if (t.tag === 'r') {
+      const n = parseInt(t.arg);
+      if (!isNaN(n)) rPrefixBytes += n;
+    }
+  }
+  result.rPrefixBytes = rPrefixBytes;
+  result.protocol = detectI1Protocol(result.hexData, rPrefixBytes);
 
   // Проверка первого байта под протокол
   if (result.hexData.length >= 2) {
@@ -387,39 +406,120 @@ function parseI1(i1) {
   return result;
 }
 
-function detectI1Protocol(hex) {
+function detectI1Protocol(hex, rPrefixBytes = 0) {
   if (!hex) return 'Unknown';
   const h = hex.toLowerCase();
 
-  // TLS 1.0-1.3 record: 16 0301/0302/0303
-  if (/^16030[0-3]/.test(h)) return 'TLS';
-  // DTLS 1.0: 16 feff, DTLS 1.2: 16 fefd
-  if (/^16fefd/.test(h) || /^16feff/.test(h)) return 'DTLS';
+  // TLS 1.0-1.3 record: 16 0301/0302/0303 (без префикса — у TLS нет TXID-стиля)
+  if (rPrefixBytes === 0 && /^16030[0-3]/.test(h)) return 'TLS';
+  // DTLS 1.0/1.2: 16 feff / 16 fefd
+  if (rPrefixBytes === 0 && (/^16fefd/.test(h) || /^16feff/.test(h))) return 'DTLS';
+
   // QUIC long header: первый байт 0xc0-0xef + известная version
-  const known_quic = ['00000001', '6b3343cf', 'ff00001d', 'ff00001e'];
-  if (h.length >= 10) {
+  // QUIC без <r> префикса — Initial пакет начинается с long header
+  if (rPrefixBytes === 0 && h.length >= 10) {
     const fb = parseInt(h.substring(0,2), 16);
     const ver = h.substring(2, 10);
+    const known_quic = ['00000001', '6b3343cf', 'ff00001d', 'ff00001e'];
     if (fb >= 0xc0 && fb <= 0xef && (known_quic.includes(ver) || h.startsWith('c0000'))) return 'QUIC';
   }
-  // SIP методы в ASCII hex
-  const sip_hex = [
-    '494e56495445',     // INVITE
-    '5245474953544552', // REGISTER
-    '4f5054494f4e53',   // OPTIONS
-    '4d455353414745',   // MESSAGE
-    '5355425343524942', // SUBSCRIB(E)
-    '4e4f54494659',     // NOTIFY
-    '535542',           // SUB
-  ];
-  if (sip_hex.some(s => h.startsWith(s))) return 'SIP';
-  // DNS: txid(2) + flags(2) 0x0100/0x0120 + qdcount(2) 0x0001
-  if (/^[0-9a-f]{4}01[02]0000[12]/.test(h)) return 'DNS';
+
+  // SIP методы в ASCII hex (без префикса)
+  if (rPrefixBytes === 0) {
+    const sip_hex = [
+      '494e56495445',     // INVITE
+      '5245474953544552', // REGISTER
+      '4f5054494f4e53',   // OPTIONS
+      '4d455353414745',   // MESSAGE
+      '5355425343524942', // SUBSCRIB(E)
+      '4e4f54494659',     // NOTIFY
+      '535542',           // SUB
+    ];
+    if (sip_hex.some(s => h.startsWith(s))) return 'SIP';
+  }
+
+  // DNS — определяем по флагам и qdcount=0x0001
+  //   Без префикса: hex = txid(2) + flags(2) + qdcount(2) + ...
+  //   С <r 2> префиксом (awg2.sh / AmneziaVPN): hex = flags(2) + qdcount(2) + ...
+  //   Флаги DNS:
+  //     0x0100/0x0120 — standard query (RD=1)
+  //     0x8180        — standard response (QR=1, RD=1, RA=1)
+  //     0x8580        — AA response (QR=1, AA=1, RD=1, RA=1) — AmneziaVPN icloud
+  //     0x8000        — response без RD
+  const dnsFlagsPattern = '(01[02]0|8180|8580|8000)';
+  if (rPrefixBytes === 0 && new RegExp('^[0-9a-f]{4}' + dnsFlagsPattern + '0001').test(h)) return 'DNS';
+  if (rPrefixBytes === 2 && new RegExp('^' + dnsFlagsPattern + '0001').test(h)) return 'DNS';
+
   // HTTP plaintext (GET/POST/HTTP)
-  if (h.startsWith('474554') || h.startsWith('504f5354') || h.startsWith('48545450')) return 'HTTP';
+  if (rPrefixBytes === 0 && (h.startsWith('474554') || h.startsWith('504f5354') || h.startsWith('48545450'))) return 'HTTP';
   // STUN binding request
-  if (h.startsWith('0001') && h.includes('2112a442')) return 'STUN';
+  if (rPrefixBytes === 0 && h.startsWith('0001') && h.includes('2112a442')) return 'STUN';
   return 'Custom';
+}
+
+// ═══════════════════════════════════════════════════════════
+//  TOOLZA / AMNEZIAVPN PROFILE DETECTION
+// ═══════════════════════════════════════════════════════════
+// Маркер `# AWG_PROFILE=` пишется awg2.sh только в серверный
+// конфиг (awg0.conf), в клиентском его нет — определяем
+// эвристически по сигнатурам.
+//
+// AmneziaVPN (официальный клиент/панель):
+//   В клиентском .conf пишет КЛЮЧИ I2-I5 с ПУСТЫМИ значениями
+//   (`I2 = `, `I3 = ` и т.д.) — это «зарезервированные слоты».
+//   awg2.sh так не делает: если CPS chain неполный, ключи
+//   просто отсутствуют в конфиге.
+//
+// Сигнатуры awg2.sh:
+//   Lite     : I1=DNS  (icloud.com),       I2-I5 нет,      MIMICRY=dns
+//   Standard : I1=QUIC,                    I2-I5 нет,      MIMICRY=quic
+//   Pro L1   : I1 нет,                     I2-I5 нет,      MIMICRY=none
+//   Pro L2   : I1 есть (любой),            I2-I5 нет
+//   Pro L3   : I1 есть,                    I2-I5 есть (хотя бы один)
+//
+// Внимание: Standard и Pro L2/quic в клиентском конфиге
+// неотличимы → помечаем "Standard / Pro L2". Аналогично
+// Lite vs Pro L2/dns.
+function detectToolzaProfile(iface, i1Proto, iCount) {
+  const hasI1 = hasKey(iface, 'i1');
+  const hasI2plus = iCount >= 2;
+
+  // AmneziaVPN — ключи I2-I5 есть, но значения пустые
+  const emptyI2plus = ['i2', 'i3', 'i4', 'i5']
+    .filter(k => Object.prototype.hasOwnProperty.call(iface, k) && iface[k] === '').length;
+  const isAmneziaVPN = emptyI2plus >= 2 && !hasI2plus;
+
+  // Pro L3 — есть непустые I2-I5
+  if (hasI2plus) {
+    return { name: 'Pro', detail: 'L3 (+I1-I5)', cls: 'pf-pro' };
+  }
+
+  // AmneziaVPN (официальный клиент) — приоритет над эвристикой awg2.sh
+  if (isAmneziaVPN) {
+    const protoLabel = hasI1 && i1Proto && i1Proto !== 'Custom' && i1Proto !== 'Unknown'
+      ? `I1=${i1Proto}` : (hasI1 ? 'I1=custom' : 'без I1');
+    return { name: 'AmneziaVPN', detail: protoLabel, cls: 'pf-amnezia' };
+  }
+
+  // Pro L1 — нет I1 (но это может быть и не Toolza-конфиг вовсе)
+  if (!hasI1) {
+    return { name: 'Pro', detail: 'L1 (без CPS)', cls: 'pf-pro', uncertain: true };
+  }
+
+  // Есть только I1, I2-I5 нет
+  if (i1Proto === 'DNS') {
+    return { name: 'Lite', detail: 'I1=DNS', cls: 'pf-lite' };
+  }
+  if (i1Proto === 'QUIC') {
+    return { name: 'Standard', detail: 'I1=QUIC', cls: 'pf-std', alt: 'или Pro L2/quic' };
+  }
+  // TLS/DTLS/SIP/STUN — у Lite/Standard такого не бывает
+  if (i1Proto === 'TLS' || i1Proto === 'DTLS' || i1Proto === 'SIP' || i1Proto === 'STUN') {
+    return { name: 'Pro', detail: `L2 (I1=${i1Proto})`, cls: 'pf-pro' };
+  }
+
+  // I1 кастомный/нераспознан
+  return { name: 'Pro', detail: 'L2 (custom I1)', cls: 'pf-pro', uncertain: true };
 }
 
 // ═══════════════════════════════════════════════════════════
@@ -468,13 +568,16 @@ function detectVersion(iface) {
   else if (iCount === 1) obfLevel = '+I1 (одиночная мимикрия)';
   else if (iCount >= 2) obfLevel = `+I1-I${iCount} (полный CPS chain)`;
 
+  // Профиль Toolza (Lite/Standard/Pro) — эвристика
+  const toolzaProfile = detectToolzaProfile(iface, protocolName, iCount);
+
   // Чистый WireGuard
   const noObfuscation = (!hasJc || Jc === 0) && (!hasS1 || (S1 === 0 && S2 === 0)) && headersDefault && !hasI1;
   if (noObfuscation) {
     return {
       ver: 'WireGuard', cls: 'ver-wg',
       desc: 'Стандартный WireGuard без обфускации. DPI легко обнаружит трафик по сигнатуре handshake.',
-      obfLevel: null, protocol: null,
+      obfLevel: null, protocol: null, toolzaProfile: null,
     };
   }
 
@@ -483,7 +586,7 @@ function detectVersion(iface) {
     const desc = hasI1
       ? `AmneziaWG 2.0 — полная обфускация. H1-H4 диапазоны + S3/S4 рандомизируют все типы пакетов + CPS (I1 имитирует ${protocolName}).`
       : `AmneziaWG 2.0 базовый — H1-H4 диапазоны + S3/S4, но без CPS мимикрии (I1 отсутствует).`;
-    return { ver: 'AWG 2.0', cls: 'ver-20', desc, obfLevel, protocol: protocolName };
+    return { ver: 'AWG 2.0', cls: 'ver-20', desc, obfLevel, protocol: protocolName, toolzaProfile };
   }
 
   // AWG 1.5 — есть I1
@@ -491,7 +594,7 @@ function detectVersion(iface) {
     return {
       ver: 'AWG 1.5', cls: 'ver-15',
       desc: `AmneziaWG 1.5 — Jc/S1/S2/H1-H4 + CPS (I1 имитирует ${protocolName}). Для AWG 2.0 нужны S3/S4 и H1-H4 в виде диапазонов.`,
-      obfLevel, protocol: protocolName,
+      obfLevel, protocol: protocolName, toolzaProfile: null,
     };
   }
 
@@ -500,14 +603,14 @@ function detectVersion(iface) {
     return {
       ver: 'AWG 1.0', cls: 'ver-10',
       desc: 'AmneziaWG 1.0 — junk-пакеты (Jc/Jmin/Jmax) + S1/S2 рандомизируют handshake + кастомные H1-H4 скрывают сигнатуру WireGuard. Нет CPS.',
-      obfLevel: 'Базовый', protocol: null,
+      obfLevel: 'Базовый', protocol: null, toolzaProfile: null,
     };
   }
 
   return {
     ver: 'AWG 1.0', cls: 'ver-10',
     desc: 'AmneziaWG минимальный — обфускация неполная.',
-    obfLevel: 'Минимум', protocol: null,
+    obfLevel: 'Минимум', protocol: null, toolzaProfile: null,
   };
 }
 
@@ -519,6 +622,17 @@ function buildSummary(iface, peer, version) {
 
   // Что за версия
   parts.push(`Это конфиг <strong>${version.ver}</strong>.`);
+
+  // Профиль (Toolza Lite/Standard/Pro или AmneziaVPN) — эвристика
+  if (version.toolzaProfile) {
+    const tp = version.toolzaProfile;
+    const hintStyle = 'color:#64748b;font-size:.85em;';
+    const profileLabel = tp.name === 'AmneziaVPN' ? 'Источник' : 'Профиль Toolza';
+    let line = `${profileLabel}: <strong>${tp.name}</strong> <span class="pill">${tp.detail}</span>`;
+    if (tp.alt) line += ` <span style="${hintStyle}">(${tp.alt})</span>`;
+    if (tp.uncertain) line += ` <span style="${hintStyle}">(определено эвристикой)</span>`;
+    parts.push(line + '.');
+  }
 
   // Кратко по функциональности
   if (version.ver === 'WireGuard') {
@@ -570,7 +684,7 @@ function buildSummary(iface, peer, version) {
     parts.push(`MTU: <span class="pill">${mtu}</span>.`);
   }
 
-  return parts.join(' ');
+  return parts.map(p => `<div class="summary-line">${p}</div>`).join('');
 }
 
 // ═══════════════════════════════════════════════════════════
@@ -627,13 +741,18 @@ function runChecks(iface, peer, version) {
   if (hasJc && Jc > 0) {
     const jminOk = Jmin !== null && Jmin >= 5 && Jmin <= 1024;
     const jmaxOk = Jmax !== null && Jmax >= Jmin && Jmax <= 1280;
-    const jrangeOk = jminOk && jmaxOk && (Jmax - Jmin) >= 50;
+    // Узкий диапазон — норма для DNS-мимикрии (Lite и AmneziaVPN)
+    const pname = version && version.toolzaProfile && version.toolzaProfile.name;
+    const narrowOk = pname === 'Lite' || pname === 'AmneziaVPN';
+    const rangeWide = jminOk && jmaxOk && (Jmax - Jmin) >= 50;
+    const jrangeOk = jminOk && jmaxOk && (rangeWide || narrowOk);
 
     push('Junk-пакеты', 'Jmin/Jmax (диапазон размеров)', jrangeOk ? 'pass' : jminOk && jmaxOk ? 'warn' : 'fail',
       Jmin !== null && Jmax !== null ? `${Jmin}–${Jmax}` : '(не задан)',
       Jmin === null || Jmax === null ? 'Jmin/Jmax не заданы — нужны при Jc>0' :
       !jmaxOk ? `Jmax=${Jmax} должен быть ≤ 1280 (MTU)` :
       !jminOk ? `Jmin=${Jmin} вне диапазона 5-1024` :
+      (Jmax - Jmin) < 50 && narrowOk ? `Jmin=${Jmin} Jmax=${Jmax} — для профиля ${pname} это норма (DNS-пакеты маленькие)` :
       (Jmax - Jmin) < 50 ? `Диапазон ${Jmin}-${Jmax} слишком узкий — рекомендуется ≥50 (размеры предсказуемы)` :
       `Jmin=${Jmin} Jmax=${Jmax} — хороший диапазон, размеры непредсказуемы`,
       jrangeOk ? 6 : jminOk && jmaxOk ? 3 : 0, 6);
@@ -780,9 +899,11 @@ function runChecks(iface, peer, version) {
   // ── CPS / I1-I5 ──────────────────────────────────────────
   const i1Parsed = I1 ? parseI1(I1) : null;
   const hasI1 = !!I1;
-  // DNS профиль: I1 = <r 2><b 0x01...> — TXID первый, это корректно
-  const i1IsDnsPattern = hasI1 && i1Parsed.firstTag === 'r' &&
-    I1.includes('<r 2>') && I1.includes('<b 0x01');
+  // Валидный паттерн начала I1: <b 0x...> сразу ИЛИ <r N><b 0x...>
+  // для DNS-мимикрии (TXID-рандомизация). parseI1 уже проверил это и положил
+  // в errors сообщение про «первый тег», если структура невалидная.
+  const i1StructErr = hasI1 && i1Parsed.errors.find(e => e.includes('первый тег'));
+  const i1RPrefixOk = hasI1 && !i1Parsed.startsWith_b && !i1StructErr;
 
   if (!hasI1) {
     push('CPS Мимикрия (I1-I5)', 'I1 — Protocol Signature', 'info', '(не задан)',
@@ -790,14 +911,16 @@ function runChecks(iface, peer, version) {
       0, 15);
   } else {
     // Критичные проверки I1
-    if (!i1Parsed.startsWith_b && !i1IsDnsPattern) {
+    if (i1StructErr) {
       push('CPS Мимикрия (I1-I5)', '🔴 I1 структура', 'fail', `первый тег: <${i1Parsed.firstTag}>`,
-        'I1 НЕ начинается с <b 0x...> — парсер amneziawg-go на клиенте ломает handshake. Переделай так чтобы первый тег был <b 0x...>.',
+        'I1 должен начинаться с <b 0x...> или с <r N><b 0x...> — иначе парсер amneziawg-go на клиенте ломает handshake.',
         0, 15);
-    } else if (i1IsDnsPattern) {
+    } else if (i1RPrefixOk) {
+      const protoLabel = i1Parsed.protocol && i1Parsed.protocol !== 'Custom' && i1Parsed.protocol !== 'Unknown'
+        ? i1Parsed.protocol : 'сигнатурный пакет';
       push('CPS Мимикрия (I1-I5)', 'I1 — Protocol Signature', 'pass',
         I1.slice(0, 50) + (I1.length > 50 ? '…' : ''),
-        'DNS профиль: <r 2> (TXID рандомный) + <b 0x01...> (DNS Query). Структура корректна — TXID всегда первый в DNS wire format. ✓',
+        `<r ${i1Parsed.rTagSizes[0]}> + <b 0x...> — ${protoLabel} с рандомизацией первых ${i1Parsed.rTagSizes[0]} байт (например TXID для DNS). Структура корректна. ✓`,
         15, 15);
     } else if (i1Parsed.hasC) {
       push('CPS Мимикрия (I1-I5)', '⚠️ Устаревший тег <c>', 'fail', 'обнаружен',
@@ -960,8 +1083,8 @@ function calcScores(checks, iface, version) {
 
   const _i1raw = iface.i1 || '';
   const _i1p = _i1raw ? parseI1(_i1raw) : null;
-  const _i1IsDns = _i1p && _i1p.firstTag === 'r' && _i1raw.includes('<r 2>') && _i1raw.includes('<b 0x01');
-  const hasValidI1 = _i1raw && (_i1p.startsWith_b || _i1IsDns);
+  // I1 валиден если parseI1 не пожаловался на структуру первого тега
+  const hasValidI1 = _i1p && !_i1p.errors.some(e => e.includes('первый тег'));
   if (hasValidI1) dpi -= 12;
 
   const iCount = ['i1','i2','i3','i4','i5'].filter(k => iface[k]).length;
@@ -991,11 +1114,9 @@ function buildFixes(checks, iface, peer, version) {
   // === CRIT (ломает работу) ===
   if (iface.i1) {
     const i1p = parseI1(iface.i1);
-    const i1IsDns = i1p.firstTag === 'r'
-      && iface.i1.includes('<r 2>')
-      && iface.i1.includes('<b 0x01');
-    if (!i1p.startsWith_b && !i1IsDns) {
-      add('crit', 'I1 должен начинаться с <code class="fix-code">&lt;b 0x...&gt;</code> — иначе handshake ломается на Android/Keenetic.');
+    // parseI1 уже знает что <r N><b ...> — валидный паттерн для DNS-мимикрии
+    if (i1p.errors.some(e => e.includes('первый тег'))) {
+      add('crit', 'I1 должен начинаться с <code class="fix-code">&lt;b 0x...&gt;</code> (или <code class="fix-code">&lt;r N&gt;&lt;b 0x...&gt;</code> для DNS-мимикрии) — иначе handshake ломается на Android/Keenetic.');
     }
     if (i1p.hasC) {
       add('crit', 'Убери тег <code class="fix-code">&lt;c&gt;</code> из I1 — вызывает ErrorCode 1000.');
@@ -1058,7 +1179,13 @@ function buildFixes(checks, iface, peer, version) {
   }
 
   if (Jmin !== null && Jmax !== null && (Jmax - Jmin) < 50) {
-    add('med', `Jmin-Jmax диапазон слишком узкий (${Jmin}-${Jmax}). Расширь до ≥50 байт разницы.`);
+    // Узкий диапазон — норма для DNS-мимикрии (Lite и AmneziaVPN):
+    // DNS-пакеты маленькие и предсказуемого размера
+    const pname = version && version.toolzaProfile && version.toolzaProfile.name;
+    const narrowOk = pname === 'Lite' || pname === 'AmneziaVPN';
+    if (!narrowOk) {
+      add('med', `Jmin-Jmax диапазон слишком узкий (${Jmin}-${Jmax}). Расширь до ≥50 байт разницы.`);
+    }
   }
 
   // === LOW (оптимизация) ===
@@ -1129,8 +1256,8 @@ function buildUpgradePath(iface, version) {
     if (iCount === 0) {
       steps.push({
         title: `Шаг ${steps.length + 1}: Добавь полный CPS chain (I2-I5)`,
-        text: 'I2-I5 это энтропийные пакеты — размывают паттерн handshake. Вариативность сессий → DPI сложнее построить сигнатуру. Только на современных клиентах (AmneziaVPN 4.8.12+).',
-        cmd: 'sudo awg2\n# Пункт 2 → Уровень 3 (+I1-I5)',
+        text: 'I1-I5 это сигнатурные пакеты которые клиент отправляет перед WireGuard handshake — DPI на пути видит «реальный» TLS/QUIC/DNS-трафик и пропускает соединение. Сервер их не использует и не обязан ничего менять. Чем больше пакетов (I1-I5 вместо одного I1) — тем сложнее DPI построить сигнатуру. Сгенерируй I2-I5 любым CPS-генератором и допиши в [Interface]. Работает на AmneziaVPN 4.8.12+ и amneziawg-go.',
+        cmd: '# В [Interface] добавь после I1:\nI2 = <b 0x...>  # например QUIC short header\nI3 = <b 0x...>  # TLS record\nI4 = <b 0x...>  # DTLS\nI5 = <b 0x...>  # DNS / SIP / etc.\n# Каждый I — отдельный сигнатурный пакет другого протокола',
       });
     }
   }
@@ -1186,6 +1313,14 @@ function dpiLabel(d) {
   if (d <= 20) return { t: 'LOW', c: '#22c55e' };
   if (d <= 45) return { t: 'MEDIUM', c: '#f59e0b' };
   return { t: 'HIGH', c: '#ef4444' };
+}
+
+function profileColor(name) {
+  if (name === 'Lite') return '#fbbf24';        // amber
+  if (name === 'Standard') return '#60a5fa';    // blue
+  if (name === 'Pro') return '#34d399';         // emerald
+  if (name === 'AmneziaVPN') return '#f472b6';  // pink (бренд Amnezia)
+  return '#94a3b8';
 }
 
 function esc(s) { return String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;'); }
@@ -1280,12 +1415,16 @@ function analyze() {
   document.getElementById('verdictText').textContent = verdict.t;
 
   // Mini
+  const profileTile = version.toolzaProfile
+    ? renderMini(version.toolzaProfile.name === 'AmneziaVPN' ? 'Source' : 'Toolza Profile', version.toolzaProfile.name, profileColor(version.toolzaProfile.name))
+    : '';
   miniEl.innerHTML =
     renderMini('AWG Version', version.ver, '#a78bfa') +
     renderMini('DPI Risk', dpiL.t, dpiL.c) +
     renderMini('Stealth', scores.stealth, '#818cf8', '%') +
     renderMini('Security', scores.total, '#e2e8f0', '%') +
-    renderMini('Camouflage', camouflage, '#60a5fa');
+    renderMini('Camouflage', camouflage, '#60a5fa') +
+    profileTile;
 
   // Fixes — сортируем по severity
   if (fixes.length) {
