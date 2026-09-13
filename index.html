@@ -36,6 +36,7 @@ textarea::placeholder{color:#1e3a5f;}
 .ver-15{background:#1a2e1a;color:#86efac;border:1px solid #16a34a;}
 .ver-20{background:#2e1a4e;color:#d8b4fe;border:1px solid #7c3aed;}
 .ver-30{background:#1a2e2a;color:#5eead4;border:1px solid #0d9488;}
+.ver-31{background:#082f36;color:#67e8f9;border:1px solid #0891b2;}
 .ver-desc{color:#94a3b8;font-size:.85rem;line-height:1.5;flex:1;min-width:200px;}
 .ver-level{display:inline-block;margin-left:8px;padding:3px 10px;border-radius:6px;font-size:.72rem;font-weight:700;background:#312e81;color:#c4b5fd;}
 
@@ -142,7 +143,7 @@ body.light .check-title{color:#0f172a;}
   <header>
     <h1 id="themeToggle" style="cursor:pointer">🛡 AmneziaWG Analyzer</h1>
     <p>Определение версии · Анализ параметров · DPI защита · Рекомендации</p>
-    <div class="subline">Поддержка: WireGuard · AWG 1.0 · AWG 1.5 · AWG 2.0 · AWG 3.0 (full CPS chain + HeaderProtection)</div>
+    <div class="subline">Поддержка: WireGuard · AWG 1.0 · AWG 1.5 · AWG 2.0 · AWG 3.0 · AWG 3.1 (CPS chain, HeaderProtection, RandomTrailers)</div>
   </header>
 
   <div class="drop-zone" id="dropZone">
@@ -155,14 +156,23 @@ MTU = 1320
 Jc = 5
 Jmin = 128
 Jmax = 768
-S1 = 20
-S2 = 70
-S3 = 32
-S4 = 8
-H1 = 1073741823-1073871823
-H2 = 2147483647-2147613647
-H3 = 3221225471-3221355471
-H4 = 4294967295-4294967295
+S1 = 86
+S2 = 48
+S3 = 16
+S4 = 19
+H1 = 1
+H2 = 2
+H3 = 3
+H4 = 4
+HeaderProtectionKey = <base64>
+ContentPaddingAddition = 16-57
+RekeyAfterTime = 118-152
+RekeyTimeout = 5
+RejectAfterTime = 178-207
+KeepaliveTimeout = 11-26
+MaxHandshakeAttempts = 18
+RandomTrailers = on
+DisableCookies = on
 I1 = <b 0x1603030101210100011d0303...><r 999><rc 16><t>
 
 [Peer]
@@ -170,7 +180,7 @@ PublicKey = <base64>
 PresharedKey = <base64>
 AllowedIPs = 0.0.0.0/0, ::/0
 Endpoint = 1.2.3.4:47300
-PersistentKeepalive = 25"></textarea>
+PersistentKeepalive = 21-29"></textarea>
   </div>
   <div class="controls">
     <button class="btn btn-primary" onclick="analyze()">⚡ Анализировать</button>
@@ -289,6 +299,81 @@ function parseHRange(iface, key) {
   const n = parseInt(v);
   if (isNaN(n)) return null;
   return { start: n, end: n, isRange: false, width: 0, raw: v };
+}
+
+// ═══════════════════════════════════════════════════════════
+//  AWG 3.x PARAMS — параметры уровня УСТРОЙСТВА
+// ═══════════════════════════════════════════════════════════
+// Источники (не по памяти):
+//   awg2.sh v0.7.27 — AWG3_KEYS_RE / AWG31_KEYS_RE / AWG_HP_MIN_S=12,
+//   awg-toolza3.0 models.py — AWG3Params.errors(), S_MAX=1132,
+//   amneziawg-tools src/config.c — u16_range_from_string, parse_bool.
+//
+//   3.0 — HeaderProtectionKey (base64, 32 байта) + ContentPaddingAddition,
+//         RekeyAfterTime, RekeyTimeout, RejectAfterTime, KeepaliveTimeout,
+//         MaxHandshakeAttempts: каждое либо "N", либо "LO-HI", оба конца uint16.
+//   3.1 — RandomTrailers, DisableCookies: parse_bool принимает ТОЛЬКО on/off
+//         и десятичное число; на "true" импорт конфига падает целиком.
+const U16_MAX = 65535;
+
+const AWG3_RANGE_KEYS = [
+  ['contentpaddingaddition', 'ContentPaddingAddition'],
+  ['rekeyaftertime',         'RekeyAfterTime'],
+  ['rekeytimeout',           'RekeyTimeout'],
+  ['rejectaftertime',        'RejectAfterTime'],
+  ['keepalivetimeout',       'KeepaliveTimeout'],
+  ['maxhandshakeattempts',   'MaxHandshakeAttempts'],
+];
+// Ключи, по которым конфиг требует именно 3.1 (amneziawg-tools/модуль v3.1.20260812+)
+const AWG31_FLAG_KEYS = [
+  ['randomtrailers', 'RandomTrailers'],
+  ['disablecookies', 'DisableCookies'],
+];
+
+// "N" или "LO-HI" (u16_range_from_string)
+function parseRangeValue(raw) {
+  const v = (raw || '').toString().trim();
+  if (!v) return null;
+  const rm = v.match(/^(\d+)\s*-\s*(\d+)$/);
+  if (rm) {
+    const lo = parseInt(rm[1], 10), hi = parseInt(rm[2], 10);
+    return { lo, hi, isRange: true, raw: v,
+             valid: hi >= lo && lo <= U16_MAX && hi <= U16_MAX,
+             reason: hi < lo ? 'верхняя граница меньше нижней' : (hi > U16_MAX ? 'выходит за uint16' : '') };
+  }
+  if (/^\d+$/.test(v)) {
+    const n = parseInt(v, 10);
+    return { lo: n, hi: n, isRange: false, raw: v, valid: n <= U16_MAX,
+             reason: n > U16_MAX ? 'выходит за uint16' : '' };
+  }
+  return { lo: null, hi: null, isRange: false, raw: v, valid: false, reason: 'не число и не диапазон LO-HI' };
+}
+
+// parse_bool (amneziawg-tools src/config.c): on / off / десятичное число
+function parseOnOff(raw) {
+  const v = (raw || '').toString().trim();
+  if (!v) return { on: false, valid: false, raw: '', reason: 'пустое значение' };
+  const low = v.toLowerCase();
+  if (low === 'on')  return { on: true,  valid: true, raw: v };
+  if (low === 'off') return { on: false, valid: true, raw: v };
+  if (/^\d+$/.test(v)) return { on: parseInt(v, 10) !== 0, valid: true, numeric: true, raw: v };
+  return { on: false, valid: false, raw: v, reason: 'parse_bool принимает только on/off или десятичное число' };
+}
+
+// Разбор всех параметров 3.x из [Interface]
+function parseAwg3(iface) {
+  const hpk = getStr(iface, 'headerprotectionkey');
+  const ranges = {};
+  AWG3_RANGE_KEYS.forEach(([k, name]) => {
+    if (hasKey(iface, k)) ranges[k] = Object.assign({ name }, parseRangeValue(getStr(iface, k)));
+  });
+  const flags = {};
+  AWG31_FLAG_KEYS.forEach(([k, name]) => {
+    if (hasKey(iface, k)) flags[k] = Object.assign({ name }, parseOnOff(getStr(iface, k)));
+  });
+  const has31 = Object.keys(flags).length > 0;
+  const has30 = !!hpk || Object.keys(ranges).length > 0;
+  return { hpk, ranges, flags, has31, has30, is3x: has30 || has31 };
 }
 
 // ═══════════════════════════════════════════════════════════
@@ -560,10 +645,13 @@ function detectVersion(iface) {
   const hasS3 = hasKey(iface, 's3');
   const hasS4 = hasKey(iface, 's4');
 
-  // AWG 3.0: наличие HeaderProtectionKey — единственный надёжный признак.
-  // Остальные поля AWG3 (ContentPaddingAddition, RekeyAfterTime и т.д.)
-  // client-side и сами по себе версию не поднимают (см. awg-toolza3.0 models.py AWG3Params.enabled).
-  const hpk = getStr(iface, 'headerprotectionkey');
+  // AWG 3.x: любой ключ уровня УСТРОЙСТВА из AWG3_KEYS_RE (awg2.sh v0.7.27)
+  // делает конфиг нечитаемым для более старого клиента, поэтому версию поднимает
+  // наличие любого из них. Саму защиту заголовков включает только
+  // HeaderProtectionKey (awg-toolza3.0 models.py AWG3Params.enabled), а
+  // RandomTrailers/DisableCookies (AWG31_KEYS_RE) отличают 3.1 от 3.0.
+  const awg3 = parseAwg3(iface);
+  const hpk = awg3.hpk;
   const hasHpk = !!hpk;
 
   const Jc = getInt(iface, 'jc', 0);
@@ -610,10 +698,11 @@ function detectVersion(iface) {
     };
   }
 
-  // AWG 3.0 — признак: HeaderProtectionKey. Требует S1-S4 >= 12
-  // (HeaderCipherNonceSize в noise-types.go), иначе шифрование заголовков
-  // молча слабеет — nonce ChaCha20 уходит в тело сообщения без падения демона.
-  if (hasHpk) {
+  // AWG 3.0/3.1 — признак: ключи уровня устройства AWG 3.x.
+  // Header protection требует S1-S4 >= 12 (HEADER_PROTECTION_NONCE_SIZE=12 в
+  // header_protection.h модуля; awg2.sh AWG_HP_MIN_S), иначе setconf падает на
+  // «Invalid argument», а на go-реализации шифрование заголовков молча слабеет.
+  if (awg3.is3x) {
     const S1v = getInt(iface, 's1', null), S2v = getInt(iface, 's2', null);
     const S3v = getInt(iface, 's3', null), S4v = getInt(iface, 's4', null);
     const sVals = [S1v, S2v, S3v, S4v];
@@ -621,14 +710,22 @@ function detectVersion(iface) {
     const sTooSmall = sAllSet && sVals.some(v => v < 12);
     const cpaKey = hasKey(iface, 'contentpaddingaddition');
     const timingKeys = ['rekeyaftertime', 'rekeytimeout', 'rejectaftertime', 'keepalivetimeout', 'maxhandshakeattempts'].filter(k => hasKey(iface, k));
-    let desc = `AmneziaWG 3.0 — HeaderProtectionKey шифрует заголовки WireGuard-пакетов симметричным ключом (независимо от Noise-хендшейка). Требует amneziawg-go с поддержкой 3.0 и клиент AmneziaWG β (не основной AmneziaVPN — его importController выбрасывает этот ключ).`;
-    if (sTooSmall) {
-      desc += ` ⚠️ S1-S4 меньше 12 — header protection формально включён, но nonce ChaCha20 частично уходит в тело сообщения: шифрование заголовков молча деградирует без явной ошибки.`;
+    const flagNames = Object.values(awg3.flags).map(f => f.name);
+    const is31 = awg3.has31;
+
+    let desc = is31
+      ? `AmneziaWG 3.1 — всё от 3.0 плюс ${flagNames.join(' и ')}. RandomTrailers дописывает случайный хвост к пакетам рукопожатия (длина перестаёт быть постоянной), DisableCookies запрещает отвечать cookie-пакетами. Нужны amneziawg-tools и модуль v3.1.20260812 или новее И НА СЕРВЕРЕ, И НА КЛИЕНТЕ — старый клиент такой конфиг даже не прочитает.`
+      : `AmneziaWG 3.0 — HeaderProtectionKey шифрует заголовки WireGuard-пакетов симметричным ключом (независимо от Noise-хендшейка). Нужны amneziawg-tools v3.0.20260730+ и модуль v3.0.20260805+ на обеих сторонах.`;
+    if (!hasHpk) {
+      desc += ` ⚠️ HeaderProtectionKey отсутствует — заголовки НЕ шифруются, работают только остальные параметры 3.x.`;
+    } else if (sTooSmall) {
+      desc += ` ⚠️ S1-S4 меньше 12 — в этот паддинг прячется nonce защиты заголовков: ядро отвергнет setconf, go-реализация молча ослабит шифрование.`;
     }
     if (hasI1) desc += ` CPS: I1 имитирует ${protocolName}.`;
     return {
-      ver: 'AWG 3.0', cls: 'ver-30', desc, obfLevel, protocol: protocolName, toolzaProfile,
-      awg3: { hpkOk: !sTooSmall, cpaKey, timingKeys, sTooSmall },
+      ver: is31 ? 'AWG 3.1' : 'AWG 3.0', cls: is31 ? 'ver-31' : 'ver-30',
+      desc, obfLevel, protocol: protocolName, toolzaProfile,
+      awg3: Object.assign({ hpkOk: hasHpk && !sTooSmall, cpaKey, timingKeys, sTooSmall, is31 }, awg3),
     };
   }
 
@@ -688,14 +785,26 @@ function buildSummary(iface, peer, version) {
   // Кратко по функциональности
   if (version.ver === 'WireGuard') {
     parts.push('Обычный WireGuard без обфускации — все пакеты видны как WireGuard, DPI может заблокировать.');
-  } else if (version.ver === 'AWG 3.0') {
-    parts.push(`Уровень обфускации: <span class="pill">${version.obfLevel || 'AWG 2.0 база + HeaderProtectionKey'}</span>.`);
+  } else if (version.ver === 'AWG 3.0' || version.ver === 'AWG 3.1') {
+    const a3 = version.awg3 || {};
+    parts.push(`Уровень обфускации: <span class="pill">${version.obfLevel || 'AWG 2.0 база + HeaderProtection'}</span>.`);
     if (version.protocol && version.protocol !== 'Custom') {
       parts.push(`CPS имитирует <strong>${version.protocol}</strong>.`);
     }
-    parts.push('⚠️ Клиент должен быть <strong>AmneziaWG β</strong>, а не основной AmneziaVPN — его импортёр (importController.cpp) переносит Jc/Jmin/Jmax/S1-S4/H1-H4/I1-I5, но выбрасывает HeaderProtectionKey. Без него сервер не разберёт handshake initiation, и подключение зависнет без внятной ошибки.');
-    if (version.awg3 && version.awg3.sTooSmall) {
-      parts.push('⚠️ S1-S4 меньше 12 — см. рекомендации ниже, шифрование заголовков ослаблено.');
+    if (a3.hpk) {
+      parts.push('Заголовок WireGuard-пакета шифруется целиком, вместе с типом сообщения — поэтому <strong>H1-H4 = 1/2/3/4 здесь норма</strong>, а не сигнатура: подменять под шифром нечего. Так же их оставляет и официальный клиент Amnezia на 3.1.');
+    }
+    const on31 = Object.values(a3.flags || {}).filter(f => f.valid && f.on).map(f => f.name);
+    if (on31.length) {
+      parts.push(`Включены параметры 3.1: <span class="pill">${on31.join('</span> <span class="pill">')}</span>.`);
+    }
+    if (a3.is31) {
+      parts.push('⚠️ Конфиг требует <strong>amneziawg-tools и модуль v3.1.20260812 или новее</strong> И на сервере, и на клиенте: более старый клиент такой конфиг даже не прочитает — неизвестный ключ отвергается целиком. В приложении AmneziaVPN поддержка 3.1 с версии <strong>5.0.1.5</strong>, прошивки роутеров её пока не умеют.');
+    } else {
+      parts.push('⚠️ Нужны amneziawg-tools v3.0.20260730+ и модуль v3.0.20260805+ на обеих сторонах. Приложение AmneziaVPN до 5.0.0.5 переносит Jc/Jmin/Jmax/S1-S4/H1-H4/I1-I5, но выбрасывает HeaderProtectionKey при импорте — без него подключение молча зависает.');
+    }
+    if (a3.sTooSmall) {
+      parts.push('⚠️ S1-S4 меньше 12 — см. рекомендации ниже, защита заголовков не поднимется.');
     }
   } else if (version.ver === 'AWG 2.0') {
     parts.push(`Уровень обфускации: <span class="pill">${version.obfLevel}</span>.`);
@@ -787,28 +896,114 @@ function runChecks(iface, peer, version) {
       'PresharedKey отсутствует — дополнительная защита от будущих квантовых атак не активна',
     pskOk ? 6 : 2, 6);
 
-  // ── AWG 3.0: HeaderProtectionKey ──────────────────────────
-  const hpk = getStr(iface, 'headerprotectionkey');
-  if (hpk) {
-    const hpkOk = isBase64(hpk);
-    push('Ключи', 'HeaderProtectionKey (AWG 3.0)', hpkOk ? 'pass' : 'fail',
-      hpkOk ? hpk.slice(0, 12) + '…' : hpk.slice(0, 20),
-      hpkOk ? 'Корректный base64 симметричный ключ на 32 байта — шифрует заголовки WireGuard-пакетов' :
-        'HeaderProtectionKey не является валидным base64-ключом на 32 байта — handshake не пройдёт',
-      hpkOk ? 10 : 0, 10);
+  // ── AWG 3.x: параметры уровня устройства ──────────────────
+  const awg3p = parseAwg3(iface);
+  const hpk = awg3p.hpk;
+  const CAT3 = 'AWG 3.x (уровень устройства)';
 
-    // S1-S4 >= 12 для header protection (HeaderCipherNonceSize)
-    const s1v = getInt(iface, 's1', null), s2v = getInt(iface, 's2', null);
-    const s3v = getInt(iface, 's3', null), s4v = getInt(iface, 's4', null);
-    const sPairs = [['S1', s1v], ['S2', s2v], ['S3', s3v], ['S4', s4v]];
-    const sSet = sPairs.filter(([, v]) => v !== null);
-    const sTooSmall = sSet.filter(([, v]) => v < 12);
-    push('Ключи', 'S1-S4 для header protection', sSet.length < 4 ? 'warn' : sTooSmall.length ? 'fail' : 'pass',
-      sSet.map(([n, v]) => `${n}=${v}`).join(' ') || '(не заданы)',
-      sSet.length < 4 ? 'Не все S1-S4 заданы — нельзя проверить достаточность для header protection (нужно ≥12 каждый)' :
-        sTooSmall.length ? `${sTooSmall.map(([n, v]) => `${n}=${v}`).join(', ')} < 12 — nonce ChaCha20 (12 байт) частично берётся из тела сообщения, шифрование заголовков молча слабеет. Демон не упадёт, но защита реально ниже заявленной.` :
-        'Все S1-S4 ≥ 12 — nonce для header protection полностью помещается в паддинг ✓',
-      sSet.length < 4 ? 2 : sTooSmall.length ? 0 : 8, 8);
+  if (awg3p.is3x) {
+    const verLabel = awg3p.has31 ? 'AWG 3.1' : 'AWG 3.0';
+
+    // HeaderProtectionKey — единственный ключ, включающий защиту заголовков
+    if (hpk) {
+      const hpkOk = isBase64(hpk);
+      push('Ключи', 'HeaderProtectionKey (AWG 3.x)', hpkOk ? 'pass' : 'fail',
+        hpkOk ? hpk.slice(0, 12) + '…' : hpk.slice(0, 20),
+        hpkOk ? 'Корректный base64 симметричный ключ на 32 байта — шифрует заголовки WireGuard-пакетов целиком, вместе с типом сообщения' :
+          'HeaderProtectionKey не является валидным base64-ключом на 32 байта — handshake не пройдёт',
+        hpkOk ? 10 : 0, 10);
+    } else {
+      push('Ключи', 'HeaderProtectionKey (AWG 3.x)', 'fail', '(не задан)',
+        `Заданы ключи ${verLabel} (${[...Object.values(awg3p.ranges), ...Object.values(awg3p.flags)].map(x => x.name).join(', ')}), но HeaderProtectionKey отсутствует — защита заголовков выключена, а конфиг всё равно требует новый клиент. Скорее всего ключ потерял импортёр клиента.`,
+        0, 10);
+    }
+
+    // S1-S4 >= 12: в этот паддинг прячется nonce защиты заголовков
+    if (hpk) {
+      const s1v = getInt(iface, 's1', null), s2v = getInt(iface, 's2', null);
+      const s3v = getInt(iface, 's3', null), s4v = getInt(iface, 's4', null);
+      const sPairs = [['S1', s1v], ['S2', s2v], ['S3', s3v], ['S4', s4v]];
+      const sSet = sPairs.filter(([, v]) => v !== null);
+      const sTooSmall = sSet.filter(([, v]) => v < 12);
+      push('Ключи', 'S1-S4 для header protection', sSet.length < 4 ? 'warn' : sTooSmall.length ? 'fail' : 'pass',
+        sSet.map(([n, v]) => `${n}=${v}`).join(' ') || '(не заданы)',
+        sSet.length < 4 ? 'Не все S1-S4 заданы — нельзя проверить достаточность для header protection (нужно ≥12 каждый)' :
+          sTooSmall.length ? `${sTooSmall.map(([n, v]) => `${n}=${v}`).join(', ')} < 12 — в первые 12 байт паддинга прячется nonce защиты заголовков. Ядерный модуль отвергает такой setconf («Invalid argument» при подъёме интерфейса), go-реализация берёт остаток nonce из тела сообщения и молча слабеет.` :
+          'Все S1-S4 ≥ 12 — nonce для header protection полностью помещается в паддинг ✓',
+        sSet.length < 4 ? 2 : sTooSmall.length ? 0 : 8, 8);
+    }
+
+    // ContentPaddingAddition — случайное удлинение транспортных пакетов
+    const cpa = awg3p.ranges['contentpaddingaddition'];
+    if (cpa) {
+      const cpaOff = cpa.valid && cpa.hi === 0;
+      push(CAT3, 'ContentPaddingAddition', !cpa.valid ? 'fail' : cpaOff ? 'warn' : 'pass', cpa.raw,
+        !cpa.valid ? `Значение "${cpa.raw}" невалидно (${cpa.reason}) — нужен "N" или "LO-HI", оба конца в пределах uint16.` :
+        cpaOff ? 'ContentPaddingAddition = 0 — добавка к паддингу содержимого выключена, длины транспортных пакетов остаются штатными для WireGuard.' :
+        cpa.isRange ? `Транспортные пакеты удлиняются на случайные ${cpa.lo}-${cpa.hi} байт до шифрования — длина перестаёт выдавать размер полезной нагрузки ✓` :
+        `Фиксированная добавка ${cpa.lo} байт — работает, но постоянный сдвиг длины сам по себе является признаком; диапазон LO-HI надёжнее.`,
+        !cpa.valid ? 0 : cpaOff ? 1 : cpa.isRange ? 6 : 4, 6);
+    }
+
+    // Таймеры рукопожатия и keepalive
+    // rangeWanted=false — параметры, где диапазон не нужен: RekeyTimeout влияет
+    // на скорость восстановления связи, а маскировки почти не даёт (awg2.sh
+    // держит его фиксированным), MaxHandshakeAttempts — счётчик попыток, а не время.
+    const timerDesc = {
+      'rekeyaftertime':       ['RekeyAfterTime', 'через сколько секунд инициируется новое рукопожатие (штатное WireGuard: 120)', true],
+      'rekeytimeout':         ['RekeyTimeout', 'пауза перед повтором рукопожатия (штатное: 5)', false],
+      'rejectaftertime':      ['RejectAfterTime', 'когда сессия считается протухшей (штатное: 180)', true],
+      'keepalivetimeout':     ['KeepaliveTimeout', 'таймер отправки keepalive (штатное: 10)', true],
+      'maxhandshakeattempts': ['MaxHandshakeAttempts', 'сколько попыток рукопожатия делать (штатное: 18)', false],
+    };
+    const timers = Object.keys(timerDesc).filter(k => awg3p.ranges[k]);
+    timers.forEach(k => {
+      const r = awg3p.ranges[k];
+      const [name, what, rangeWanted] = timerDesc[k];
+      const ok = r.valid && (r.isRange || !rangeWanted);
+      push(CAT3, name, !r.valid ? 'fail' : ok ? 'pass' : 'warn', r.raw,
+        !r.valid ? `Значение "${r.raw}" невалидно (${r.reason}) — нужен "N" или "LO-HI", оба конца в пределах uint16.` :
+        r.isRange ? `Диапазон ${r.lo}-${r.hi} — ${what}. Значение выбирается заново на каждом срабатывании, поэтому тайминг не даёт стабильной временной сигнатуры ✓` :
+        rangeWanted ? `Одиночное ${r.lo} — ${what}. Работает, но постоянный интервал оставляет ровную временную сигнатуру; диапазон LO-HI её убирает.` :
+        `${r.lo} — ${what}. Одиночное значение здесь норма: разброс маскировки почти не даёт, а на восстановление связи влияет заметно ✓`,
+        !r.valid ? 0 : ok ? 4 : 2, 4);
+    });
+
+    // Инвариант: сессию нельзя отвергать раньше, чем она успевает сменить ключи
+    const rat = awg3p.ranges['rekeyaftertime'], rjt = awg3p.ranges['rejectaftertime'];
+    if (rat && rjt && rat.valid && rjt.valid) {
+      const ok = rat.hi < rjt.lo;
+      push(CAT3, 'RekeyAfterTime < RejectAfterTime', ok ? 'pass' : 'fail',
+        `${rat.raw} / ${rjt.raw}`,
+        ok ? 'Рекей всегда успевает пройти до отклонения сессии ✓' :
+          `RekeyAfterTime доходит до ${rat.hi}, а RejectAfterTime начинается с ${rjt.lo} — при неудачном розыгрыше сессия будет отвергнута раньше, чем сторона успеет сменить ключи: туннель начнёт периодически вставать.`,
+        ok ? 4 : 0, 4);
+    }
+
+    // ── AWG 3.1: RandomTrailers / DisableCookies ──
+    const rt = awg3p.flags['randomtrailers'];
+    if (rt) {
+      push(CAT3, 'RandomTrailers (AWG 3.1)', !rt.valid ? 'fail' : rt.on ? 'pass' : 'warn', rt.raw,
+        !rt.valid ? `Значение "${rt.raw}" не читается: parse_bool в amneziawg-tools принимает только on/off и десятичное число, на всём остальном импорт конфига падает целиком.` :
+        rt.on ? 'Включён — к пакетам рукопожатия дописывается случайный хвост, их длина перестаёт быть постоянной. Параметр уровня устройства: обязан совпадать на обеих сторонах, сторона без него отбросит удлинённый пакет ✓' :
+        'Выключен явным off — длины пакетов рукопожатия остаются постоянными. Явный off безопаснее отсутствия ключа: клиент не унаследует чужое значение.',
+        !rt.valid ? 0 : rt.on ? 6 : 2, 6);
+    }
+    const dc = awg3p.flags['disablecookies'];
+    if (dc) {
+      push(CAT3, 'DisableCookies (AWG 3.1)', !dc.valid ? 'fail' : 'pass', dc.raw,
+        !dc.valid ? `Значение "${dc.raw}" не читается: parse_bool принимает только on/off и десятичное число.` :
+        dc.on ? 'Включён — устройство не отвечает cookie-пакетами под нагрузкой. Убирает из трафика отдельный тип пакета известного размера, но одновременно отключает штатную защиту WireGuard от флуда рукопожатиями. Параметр односторонний, согласовывать с пиром не нужно.' :
+        'Выключен — cookie-ответы отправляются как обычно (штатная защита от флуда работает, но в трафике остаётся отдельный тип пакета).',
+        !dc.valid ? 0 : dc.on ? 4 : 3, 4);
+    }
+
+    // Совместимость клиента
+    push(CAT3, 'Требования к клиенту', 'info', verLabel,
+      awg3p.has31
+        ? 'Конфиг содержит ключи 3.1 — нужны amneziawg-tools и модуль v3.1.20260812 или новее И на сервере, и на клиенте. Клиент постарше не прочитает конфиг вовсе: неизвестный ключ отвергается целиком.'
+        : 'Конфиг содержит ключи 3.0 — нужны amneziawg-tools v3.0.20260730+ и модуль v3.0.20260805+ на обеих сторонах. Основной AmneziaVPN до 5.0.1.5 такой конфиг импортирует без HeaderProtectionKey, и подключение молча зависает.',
+      0, 0);
   }
 
   // ── JUNK PACKETS ────────────────────────────────────────
@@ -845,7 +1040,10 @@ function runChecks(iface, peer, version) {
   // ── S1/S2 — AWG 1.5+ ─────────────────────────────────────
   const hasS1 = S1 !== null, hasS2 = S2 !== null;
   const s1Ok = hasS1 && S1 >= 0 && S1 <= 150;
-  const s2Ok = hasS2 && S2 >= 0 && S2 <= 1188; // AWG 2.0 protocol limit
+  // Потолок S2: AWG 2.0 — 1188, AWG 3.x — общий S_MAX=1132 (1280-148, размер
+  // Init-пакета; awg-toolza3.0 models.py S_MAX)
+  const s2Limit = awg3p.is3x ? 1132 : 1188;
+  const s2Ok = hasS2 && S2 >= 0 && S2 <= s2Limit;
   const s1s2Conflict = hasS1 && hasS2 && (S1 + 56 === S2);
 
   push('Handshake Padding (S1/S2)', 'S1 — Init prefix', !hasS1 ? 'info' : S1 === 0 ? 'warn' : s1Ok ? 'pass' : 'warn',
@@ -860,20 +1058,31 @@ function runChecks(iface, peer, version) {
     hasS2 ? String(S2) : '(не задан)',
     !hasS2 ? 'S2 не задан — доступен в AWG 1.5 / 2.0' :
     S2 === 0 ? 'S2=0 — рандомный префикс Response-пакета отключён' :
-    s2Ok ? `S2=${S2} — корректно (AWG 2.0 лимит 1188 байт) ✓` :
-    `S2=${S2} — превышает protocol limit 1188`,
+    s2Ok ? `S2=${S2} — корректно (лимит ${s2Limit} байт) ✓` :
+    `S2=${S2} — превышает лимит ${s2Limit} байт`,
     !hasS2 ? 1 : S2 === 0 ? 0 : s2Ok ? 6 : 3, 6);
 
-  if (s1s2Conflict) {
-    push('Handshake Padding (S1/S2)', '⚠️ S1+56 = S2 конфликт', 'fail', `S1=${S1} S2=${S2}`,
-      `S1+56=${S1 + 56} совпадает с S2=${S2} — правило AWG: S1+56 ≠ S2. Это делает пакеты предсказуемыми!`, 0, 0);
+  // Совпадение ДЛИН пакетов после паддинга возвращает наблюдателю ровно то, что
+  // паддинг прятал, — тип пакета. Базовые размеры из messages.h модуля:
+  // initiation 148, response 92, cookie 64 (awg2.sh AWG_S_DELTA_* v0.7.27):
+  //   148+S1 == 92+S2  → S2 = S1+56    148+S1 == 64+S3 → S3 = S1+84
+  //    92+S2 == 64+S3  → S3 = S2+28
+  const sCollisions = [];
+  if (S1 !== null && S2 !== null && S1 + 56 === S2) sCollisions.push(['Init/Response', `S1+56=${S1 + 56} = S2`]);
+  if (S1 !== null && S3 !== null && S1 + 84 === S3) sCollisions.push(['Init/Cookie', `S1+84=${S1 + 84} = S3`]);
+  if (S2 !== null && S3 !== null && S2 + 28 === S3) sCollisions.push(['Response/Cookie', `S2+28=${S2 + 28} = S3`]);
+  if (sCollisions.length) {
+    push('Handshake Padding (S1/S2)', '⚠️ Совпадение длин пакетов', 'fail',
+      sCollisions.map(([n, v]) => `${n}: ${v}`).join(' · '),
+      `Два типа пакетов рукопожатия становятся одной длины (${sCollisions.map(([n]) => n).join(', ')}) — наблюдателю снова виден тип пакета, ради сокрытия которого и добавлялся паддинг. Разведи S не меньше чем на 10 байт от совпадения.`,
+      0, 0);
   }
 
   // S3/S4 — AWG 2.0: S4 ≤ 32 жёстко (Cookie-паддинг ограничен протоколом).
   // AWG 3.0 (есть HeaderProtectionKey): лимит общий для всех S — S_MAX=1132
   // (1280 - 148, размер Init-пакета), отдельного потолка в 32 для S4 нет —
   // это ограничение снято вместе с добавлением header protection.
-  const isAwg3 = !!getStr(iface, 'headerprotectionkey');
+  const isAwg3 = awg3p.is3x;
   if (S3 !== null || S4 !== null) {
     const S_MAX_HARD = 1132;
     const s3Ok = isAwg3 ? (S3 !== null && S3 >= 0 && S3 <= S_MAX_HARD) : (S3 !== null && S3 >= 0 && S3 <= 64);
@@ -882,17 +1091,17 @@ function runChecks(iface, peer, version) {
     if (!isAwg3 && S4 !== null && S4 > 32) {
       detail = `S4=${S4} — превышает лимит AWG 2.0 (максимум 32)`;
     } else if (isAwg3 && S4 !== null && S4 > S_MAX_HARD) {
-      detail = `S4=${S4} — превышает общий лимит AWG 3.0 (${S_MAX_HARD} байт, 1280-148)`;
+      detail = `S4=${S4} — превышает общий лимит AWG 3.x (${S_MAX_HARD} байт, 1280-148)`;
     } else if (!isAwg3 && !s3Ok) {
       detail = `S3=${S3} — вне диапазона 0-64`;
     } else if (isAwg3 && !s3Ok) {
-      detail = `S3=${S3} — превышает общий лимит AWG 3.0 (${S_MAX_HARD} байт)`;
+      detail = `S3=${S3} — превышает общий лимит AWG 3.x (${S_MAX_HARD} байт)`;
     } else if (isAwg3) {
-      detail = `S3/S4 — в AWG 3.0 потолок в 32 байта для S4 снят вместе с header protection, действует общий лимит ${S_MAX_HARD} байт.`;
+      detail = `S3/S4 — в AWG 3.x потолок в 32 байта для S4 снят вместе с header protection, действует общий лимит ${S_MAX_HARD} байт.`;
     } else {
       detail = 'S3/S4 — расширенные префиксы AWG 2.0 для Cookie и Data пакетов. Максимальная непредсказуемость размеров.';
     }
-    push('Handshake Padding (S3/S4)', isAwg3 ? 'S3/S4 (AWG 3.0)' : 'S3/S4 (AWG 2.0 extended)', s3Ok && s4Ok ? 'pass' : 'warn',
+    push('Handshake Padding (S3/S4)', isAwg3 ? 'S3/S4 (AWG 3.x)' : 'S3/S4 (AWG 2.0 extended)', s3Ok && s4Ok ? 'pass' : 'warn',
       `S3=${S3 ?? '—'} S4=${S4 ?? '—'}`, detail, s3Ok && s4Ok ? 4 : 2, 4);
   } else if (version.ver === 'AWG 2.0') {
     push('Handshake Padding (S3/S4)', 'S3/S4', 'warn', '(не заданы)',
@@ -952,13 +1161,31 @@ function runChecks(iface, peer, version) {
     rangesSpread = coveredQuadrants.size;
   }
 
+  // ── H1-H4 на AWG 3.x ──
+  // При HeaderProtectionKey заголовок шифруется целиком, вместе с типом пакета:
+  // наблюдателю видна только шифрограмма, прочитать тип он не может ни при каких
+  // H. Поэтому 1/2/3/4 здесь не сигнатура, а штатное значение — ровно так их
+  // оставляют и клиент Amnezia на 3.1, и генератор awg2.sh v0.7.27 (_h_fixed=1
+  // при AWG_PROTO=3.0/3.1). Диапазоны H на 3.x — чистая цена (замер на одном
+  // сервере: 10 Мбит/с против 100+) без выигрыша в маскировке.
+  const hpEnabled = !!hpk;
   let hStatus, hPts, hDetail;
-  if (!hasAllH) {
+  if (isAwg3 && hpEnabled && hasAllH && !hHaveRanges) {
+    hStatus = 'pass'; hPts = 12;
+    hDetail = defaultH
+      ? 'H1-H4 = 1/2/3/4 — на AWG 3.x это норма, а не сигнатура: HeaderProtectionKey шифрует заголовок целиком вместе с типом пакета, читать magic-заголовки снаружи нечем. Так же их оставляет официальный клиент Amnezia на 3.1 ✓'
+      : 'H1-H4 заданы одиночными числами — на AWG 3.x этого достаточно: заголовок шифруется целиком, значение типа пакета наружу не попадает ✓';
+  } else if (isAwg3 && hpEnabled && hasAllH && hHaveRanges) {
+    hStatus = 'pass'; hPts = 12;
+    hDetail = 'H1-H4 заданы диапазонами. На AWG 3.x это работает, но выигрыша не даёт: заголовок уже шифруется HeaderProtectionKey целиком. Диапазоны H заметно снижают скорость — на 3.x их можно вернуть к штатным 1/2/3/4.';
+  } else if (!hasAllH) {
     hStatus = 'warn'; hPts = 0;
-    hDetail = 'H1-H4 не заданы или неполные — WireGuard сигнатура handshake не скрыта';
+    hDetail = isAwg3 && hpEnabled
+      ? 'H1-H4 не заданы — на AWG 3.x не критично (заголовок шифруется целиком), но клиент ожидает полный набор параметров от сервера'
+      : 'H1-H4 не заданы или неполные — WireGuard сигнатура handshake не скрыта';
   } else if (defaultH) {
     hStatus = 'fail'; hPts = 0;
-    hDetail = 'H1=1 H2=2 H3=3 H4=4 — ДЕФОЛТНЫЕ значения WireGuard! Handshake легко идентифицируется DPI.';
+    hDetail = 'H1=1 H2=2 H3=3 H4=4 — ДЕФОЛТНЫЕ значения WireGuard, а заголовок здесь открытый (нет HeaderProtectionKey): handshake легко идентифицируется DPI.';
   } else if (!uniqueH) {
     hStatus = 'fail'; hPts = 0;
     hDetail = 'H1-H4 содержат повторяющиеся значения — конфигурация невалидна';
@@ -982,7 +1209,7 @@ function runChecks(iface, peer, version) {
   push('Magic Headers (H1-H4)', 'H1-H4', hStatus, hDisplayVal, hDetail, hPts, 12);
 
   // Ширина диапазонов
-  if (hHaveRanges) {
+  if (hHaveRanges && !(isAwg3 && hpEnabled)) {
     const narrowRanges = allHraw.filter(h => h.isRange && h.width < 1000);
     if (narrowRanges.length) {
       push('Magic Headers (H1-H4)', 'Ширина диапазонов H', 'warn',
@@ -1008,18 +1235,18 @@ function runChecks(iface, peer, version) {
     // Критичные проверки I1
     if (i1StructErr) {
       push('CPS Мимикрия (I1-I5)', '🔴 I1 структура', 'fail', `первый тег: <${i1Parsed.firstTag}>`,
-        'I1 должен начинаться с <b 0x...> или с <r N><b 0x...> — иначе парсер amneziawg-go на клиенте ломает handshake.',
+        'I1 должен начинаться с &lt;b 0x...&gt; или с &lt;r N&gt;&lt;b 0x...&gt; — иначе парсер amneziawg-go на клиенте ломает handshake.',
         0, 15);
     } else if (i1RPrefixOk) {
       const protoLabel = i1Parsed.protocol && i1Parsed.protocol !== 'Custom' && i1Parsed.protocol !== 'Unknown'
         ? i1Parsed.protocol : 'сигнатурный пакет';
       push('CPS Мимикрия (I1-I5)', 'I1 — Protocol Signature', 'pass',
         I1.slice(0, 50) + (I1.length > 50 ? '…' : ''),
-        `<r ${i1Parsed.rTagSizes[0]}> + <b 0x...> — ${protoLabel} с рандомизацией первых ${i1Parsed.rTagSizes[0]} байт (например TXID для DNS). Структура корректна. ✓`,
+        `&lt;r ${i1Parsed.rTagSizes[0]}&gt; + &lt;b 0x...&gt; — ${protoLabel} с рандомизацией первых ${i1Parsed.rTagSizes[0]} байт (например TXID для DNS). Структура корректна. ✓`,
         15, 15);
     } else if (i1Parsed.hasC) {
       push('CPS Мимикрия (I1-I5)', '⚠️ Устаревший тег <c>', 'fail', 'обнаружен',
-        'Тег <c> вызывает ErrorCode 1000 на старых клиентах AmneziaVPN. Убери его.',
+        'Тег &lt;c&gt; вызывает ErrorCode 1000 на старых клиентах AmneziaVPN. Убери его.',
         5, 15);
     } else if (i1Parsed.maxRSize > 1000) {
       push('CPS Мимикрия (I1-I5)', '⚠️ Большой тег', 'warn',
@@ -1028,7 +1255,7 @@ function runChecks(iface, peer, version) {
         10, 15);
     } else if (i1Parsed.hasDeprecatedD) {
       push('CPS Мимикрия (I1-I5)', '⚠️ Тег <d>/<ds>/<dz>', 'warn', 'обнаружен',
-        'В текущей amneziawg-go 3.0.1 эти теги парсятся, но не подключены к отправке пакетов — задел под AWG 4.0. Используй <r>/<rc>/<rd>.',
+        'В текущей amneziawg-go 3.0.1 эти теги парсятся, но не подключены к отправке пакетов — задел под AWG 4.0. Используй &lt;r&gt;/&lt;rc&gt;/&lt;rd&gt;.',
         8, 15);
     } else if (!i1Parsed.firstByteOk && i1Parsed.protocol !== 'Unknown' && i1Parsed.protocol !== 'Custom') {
       push('CPS Мимикрия (I1-I5)', '⚠️ Первый байт I1', 'warn',
@@ -1038,7 +1265,7 @@ function runChecks(iface, peer, version) {
     } else {
       push('CPS Мимикрия (I1-I5)', 'I1 — Protocol Signature', 'pass',
         I1.slice(0, 40) + (I1.length > 40 ? '…' : ''),
-        `I1 валидный, начинается с <b 0x...>, max <r>=${i1Parsed.maxRSize}. Трафик имитирует реальный протокол.`,
+        `I1 валидный, начинается с &lt;b 0x...&gt;${i1Parsed.maxRSize ? `, самый большой тег-заполнитель — ${i1Parsed.maxRSize} байт` : ' и состоит из одного снимка протокола: теги-заполнители &lt;r&gt;/&lt;rc&gt;/&lt;rd&gt; не используются'}. Трафик имитирует реальный протокол.`,
         15, 15);
     }
 
@@ -1139,6 +1366,25 @@ function runChecks(iface, peer, version) {
 
     push('Сеть', 'MTU', mtuConflict ? 'fail' : mtuOk && (!isAwg2 || mtuOptimal) ? 'pass' : 'warn',
       String(mtu), detail, mtuConflict ? 0 : mtuOk && (!isAwg2 || mtuOptimal) ? 4 : 2, 4);
+
+    // Запас до 1500 на 3.x: полезная нагрузка обрастает заголовком WG (16),
+    // тегом Poly1305 (16), junk S4, верхней границей ContentPaddingAddition и
+    // IP/UDP (28). RandomTrailers добавляет хвост, которого в конфиге не видно,
+    // поэтому держим ещё 24 байта запаса (awg2.sh AWG_MTU_* v0.7.27).
+    if (awg3p.is3x) {
+      const cpaMax = awg3p.ranges['contentpaddingaddition'] && awg3p.ranges['contentpaddingaddition'].valid
+        ? awg3p.ranges['contentpaddingaddition'].hi : 0;
+      const s4v = S4 !== null ? S4 : 0;
+      const outer = mtu + 60 + s4v + cpaMax;
+      const limit = 1500 - 24;
+      const headroomOk = outer <= limit;
+      const safeMtu = Math.max(1280, Math.min(1420, Math.floor((limit - 60 - s4v - cpaMax) / 10) * 10));
+      push('Сеть', 'Запас до 1500 байт (AWG 3.x)', headroomOk ? 'pass' : 'warn', `внешний пакет до ${outer} Б`,
+        headroomOk
+          ? `${mtu} + 32 (WG) + ${s4v} (S4) + ${cpaMax} (ContentPaddingAddition) + 28 (IP/UDP) = ${outer} Б — запас до пути в 1500 есть ✓`
+          : `${mtu} + 32 (WG) + ${s4v} (S4) + ${cpaMax} (ContentPaddingAddition) + 28 (IP/UDP) = ${outer} Б, плюс невидимый хвост RandomTrailers. Крупные пакеты начнут резаться, а PMTU discovery по UDP работает не везде — выглядит это не как обрыв, а как просадка скорости в разы при живом туннеле. Снизь MTU до ${safeMtu}.`,
+        headroomOk ? 4 : 1, 4);
+    }
   } else {
     push('Сеть', 'MTU', 'warn', '(не задан)',
       'MTU не задан — будет использован дефолт 1420, но для AWG 2.0 лучше указать 1320', 1, 4);
@@ -1152,7 +1398,7 @@ function runChecks(iface, peer, version) {
     if (kaRange && kaRange.isRange) {
       const kaOk = kaRange.start >= 15 && kaRange.end <= 60 && kaRange.start < kaRange.end;
       push('Сеть', 'PersistentKeepalive', kaOk ? 'pass' : 'warn', kaRange.raw,
-        kaOk ? `${kaRange.raw}s — диапазон AWG 3.0, клиент берёт случайное значение каждый раз ✓` :
+        kaOk ? `${kaRange.raw}s — диапазон AWG 3.x, значение выбирается заново на каждой отправке (u16_range_pick_one в timers.c), поэтому keepalive не даёт ровной временной сигнатуры ✓` :
           `${kaRange.raw}s — диапазон вне рекомендуемых 15-60`,
         kaOk ? 3 : 1, 3);
     } else {
@@ -1182,7 +1428,13 @@ function calcScores(checks, iface, version) {
 
   // DPI risk — чем выше тем хуже
   let dpi = 95;
-  if (version.ver === 'AWG 3.0') dpi -= (version.awg3 && version.awg3.sTooSmall ? 58 : 65);
+  const a3 = version.awg3 || null;
+  if (version.ver === 'AWG 3.1') {
+    // 3.1 = 3.0 плюс случайные хвосты рукопожатий и отсутствие cookie-ответов
+    dpi -= (a3 && a3.sTooSmall ? 62 : 70);
+    if (a3 && a3.flags && a3.flags['randomtrailers'] && !a3.flags['randomtrailers'].on) dpi += 4;
+  }
+  else if (version.ver === 'AWG 3.0') dpi -= (a3 && a3.sTooSmall ? 58 : 65);
   else if (version.ver === 'AWG 2.0') dpi -= 55;
   else if (version.ver === 'AWG 1.5') dpi -= 40;
   else if (version.ver === 'AWG 1.0') dpi -= 25;
@@ -1190,8 +1442,12 @@ function calcScores(checks, iface, version) {
   const Jc = getInt(iface, 'jc', 0);
   if (Jc >= 3) dpi -= 10;
 
+  // Диапазоны H дают выигрыш только при открытом заголовке. На 3.x заголовок
+  // шифруется HeaderProtectionKey целиком, поэтому бонус даётся за сам факт
+  // защиты заголовков, а не за форму H1-H4.
   const h1 = parseHRange(iface, 'h1');
-  if (h1 && h1.isRange) dpi -= 8;
+  if (a3 && a3.hpk) dpi -= 8;
+  else if (h1 && h1.isRange) dpi -= 8;
 
   const _i1raw = iface.i1 || '';
   const _i1p = _i1raw ? parseI1(_i1raw) : null;
@@ -1241,37 +1497,70 @@ function buildFixes(checks, iface, peer, version) {
     }
   }
 
-  // AWG 3.0: HeaderProtectionKey + S1-S4 < 12
-  const hpkFix = getStr(iface, 'headerprotectionkey');
+  // ── AWG 3.x ──
+  const awg3f = parseAwg3(iface);
+  const hpkFix = awg3f.hpk;
   if (hpkFix) {
     const sVals = [getInt(iface, 's1', null), getInt(iface, 's2', null), getInt(iface, 's3', null), getInt(iface, 's4', null)];
     if (sVals.every(v => v !== null) && sVals.some(v => v < 12)) {
-      add('high', `HeaderProtectionKey задан, но S1-S4 меньше 12 (нужно ${sVals.map((v,i)=>`S${i+1}=${v}`).join(' ')}) — header protection формально включён, но nonce ChaCha20 частично уходит в тело сообщения и шифрование заголовков молча слабеет. Подними все S1-S4 до ≥12.`);
+      add('crit', `HeaderProtectionKey задан, но S1-S4 меньше 12 (${sVals.map((v,i)=>`S${i+1}=${v}`).join(' ')}) — в первые 12 байт паддинга прячется nonce защиты заголовков. Ядерный модуль отвергнет такой конфиг («Unable to modify interface: Invalid argument»), go-реализация молча ослабит шифрование. Подними все S1-S4 до ≥12.`);
     }
+  } else if (awg3f.is3x) {
+    add('crit', `Заданы параметры AWG 3.x (${[...Object.values(awg3f.ranges), ...Object.values(awg3f.flags)].map(x => x.name).join(', ')}), но HeaderProtectionKey отсутствует — заголовки не шифруются, а конфиг всё равно требует нового клиента. Обычно ключ выбрасывает импортёр клиента: возьми .conf с сервера как есть.`);
   }
 
-  // H1-H4 default
+  // Значения параметров 3.x, которые клиент не прочитает
+  Object.values(awg3f.ranges).filter(r => !r.valid).forEach(r => {
+    add('crit', `${r.name} = ${esc(r.raw)} — ${r.reason}. Формат: «N» или «LO-HI», оба конца в пределах uint16 (0-65535).`);
+  });
+  Object.values(awg3f.flags).filter(f => !f.valid).forEach(f => {
+    add('crit', `${f.name} = ${esc(f.raw)} — parse_bool в amneziawg-tools принимает только <code class="fix-code">on</code>/<code class="fix-code">off</code> и десятичное число. На любом другом значении импорт конфига падает целиком.`);
+  });
+
+  // Инвариант таймеров: рекей обязан успевать до отклонения сессии
+  const ratF = awg3f.ranges['rekeyaftertime'], rjtF = awg3f.ranges['rejectaftertime'];
+  if (ratF && rjtF && ratF.valid && rjtF.valid && ratF.hi >= rjtF.lo) {
+    add('high', `RekeyAfterTime=${esc(ratF.raw)} пересекается с RejectAfterTime=${esc(rjtF.raw)} — сессию отвергнет раньше, чем она успеет сменить ключи, и туннель будет периодически вставать. Разведи диапазоны: верх RekeyAfterTime строго ниже низа RejectAfterTime.`);
+  }
+
+  // RandomTrailers обязан совпадать на обеих сторонах
+  const rtF = awg3f.flags['randomtrailers'];
+  if (rtF && rtF.valid && rtF.on) {
+    add('low', 'RandomTrailers включён — параметр уровня устройства: то же значение обязано стоять на сервере, иначе сторона без него отбросит удлинённые пакеты рукопожатия и подключение просто не установится.');
+  }
+
+  // H1-H4 default — сигнатура только при ОТКРЫТОМ заголовке.
+  // На 3.x с HeaderProtectionKey заголовок шифруется целиком вместе с типом
+  // пакета, и 1/2/3/4 там штатны (так же делает клиент Amnezia на 3.1).
   const h1 = parseHRange(iface, 'h1');
   const h2 = parseHRange(iface, 'h2');
   const h3 = parseHRange(iface, 'h3');
   const h4 = parseHRange(iface, 'h4');
-  if (h1 && h2 && h3 && h4 && !h1.isRange && h1.start === 1 && h2.start === 2 && h3.start === 3 && h4.start === 4) {
-    add('crit', 'H1=1 H2=2 H3=3 H4=4 — дефолтные значения WireGuard. DPI сразу видит сигнатуру. Используй случайные числа ≥5.');
+  const hDefaults = h1 && h2 && h3 && h4 && !h1.isRange && h1.start === 1 && h2.start === 2 && h3.start === 3 && h4.start === 4;
+  if (hDefaults && !hpkFix) {
+    add('crit', 'H1=1 H2=2 H3=3 H4=4 — дефолтные значения WireGuard, а заголовок здесь открытый. DPI сразу видит сигнатуру. Используй диапазоны по квадрантам uint32 (или перейди на AWG 3.x, где заголовок шифруется целиком).');
   }
 
-  // S1+56=S2
+  // Совпадение длин пакетов рукопожатия (базовые размеры 148/92/64 из messages.h)
+  const S3f = getInt(iface, 's3', null);
   if (S1 !== null && S2 !== null && S1 + 56 === S2) {
-    add('high', `S1+56=${S1+56} совпадает с S2=${S2}. Измени S1 или S2 — правило AWG: S1+56 ≠ S2.`);
+    add('high', `S1+56=${S1+56} совпадает с S2=${S2}: Init и Response станут одной длины и тип пакета снова читается. Измени S1 или S2 — правило AWG: S1+56 ≠ S2.`);
+  }
+  if (S1 !== null && S3f !== null && S1 + 84 === S3f) {
+    add('high', `S1+84=${S1+84} совпадает с S3=${S3f}: Init и Cookie станут одной длины. Разведи S1 и S3.`);
+  }
+  if (S2 !== null && S3f !== null && S2 + 28 === S3f) {
+    add('high', `S2+28=${S2+28} совпадает с S3=${S3f}: Response и Cookie станут одной длины. Разведи S2 и S3.`);
   }
 
   // S4 > 32 — правило только для AWG 2.0; в AWG 3.0 (HeaderProtectionKey задан)
   // потолок другой — общий S_MAX=1132 для всех S1-S4
-  const isAwg3Fix = !!getStr(iface, 'headerprotectionkey');
+  const isAwg3Fix = awg3f.is3x;
   if (!isAwg3Fix && S4 !== null && S4 > 32) {
     add('high', `S4=${S4} превышает лимит AWG 2.0 (максимум 32).`);
   }
   if (isAwg3Fix && S4 !== null && S4 > 1132) {
-    add('high', `S4=${S4} превышает общий лимит AWG 3.0 (1132 байта).`);
+    add('high', `S4=${S4} превышает общий лимит AWG 3.x (1132 байта).`);
   }
 
   // Endpoint=домен
@@ -1368,7 +1657,7 @@ function buildUpgradePath(iface, version) {
     steps.push({
       title: 'Шаг 1: Обнови до AWG 2.0',
       text: 'AWG 2.0 добавляет S3/S4 (дополнительная рандомизация) и H1-H4 как диапазоны (случайное значение каждый handshake). Пропиши в [Interface]:',
-      cmd: 'S3 = 32\nS4 = 8\nH1 = 100000000-100100000\nH2 = 1200000000-1200100000\nH3 = 2300000000-2300100000\nH4 = 3400000000-3400100000',
+      cmd: '# S3 не должен совпасть с длинами других пакетов: S2+28 != S3, S1+84 != S3\nS3 = 32\nS4 = 8\nH1 = 100000000-100100000\nH2 = 1200000000-1200100000\nH3 = 2300000000-2300100000\nH4 = 3400000000-3400100000',
     });
   }
 
@@ -1382,9 +1671,18 @@ function buildUpgradePath(iface, version) {
 
   if (version.ver === 'AWG 2.0') {
     steps.push({
-      title: `Шаг ${steps.length + 1}: Обнови до AWG 3.0 (HeaderProtectionKey)`,
-      text: 'AWG 3.0 добавляет симметричное шифрование заголовков WireGuard-пакетов отдельным ключом (независимо от Noise-хендшейка). S1-S4 при этом обязаны быть ≥12 — из первых 12 байт паддинга берётся nonce ChaCha20, при меньшем значении шифрование заголовков молча слабеет. Клиент — AmneziaWG β, основной AmneziaVPN этот ключ не переносит.',
-      cmd: '# Сгенерируй симметричный ключ (32 байта, base64):\nHeaderProtectionKey = <base64-ключ>\n# Подними S1-S4 минимум до 12:\nS1 = 40\nS2 = 96\nS3 = 20\nS4 = 20\n\n# Через awg3-toolza:\nsudo awg3\n# Пункт 1 (создать сервер) сгенерирует ключ и S1-S4 автоматически',
+      title: `Шаг ${steps.length + 1}: Обнови до AWG 3.1`,
+      text: 'AWG 3.x шифрует заголовок WireGuard-пакета целиком отдельным симметричным ключом (HeaderProtectionKey), рандомизирует паддинг содержимого и тайминги рукопожатий, а 3.1 добавляет к этому RandomTrailers и DisableCookies. Бонусом снимается плата за диапазоны H1-H4: под шифрованием заголовка они не нужны, ставятся штатные 1/2/3/4 — и скорость возвращается. S1-S4 при этом обязаны быть ≥12: в этот паддинг прячется nonce защиты заголовков. Версия задаётся на весь сервер сразу — клиенты на 2.0 к серверу 3.x не подключатся.',
+      cmd: '# В [Interface] сервера и всех клиентов:\nHeaderProtectionKey = <base64-ключ, awg genkey>\nContentPaddingAddition = 16-64\nRekeyAfterTime = 115-150\nRekeyTimeout = 5\nRejectAfterTime = 175-210\nKeepaliveTimeout = 10-28\nMaxHandshakeAttempts = 18\nRandomTrailers = on\nDisableCookies = on\n# S1-S4 поднять минимум до 12 (nonce header protection),\n# значения развести: S1+56 != S2, S1+84 != S3, S2+28 != S3\nS1 = 40\nS2 = 112\nS3 = 20\nS4 = 24\n# S4 + верх ContentPaddingAddition + хвост RandomTrailers съедают запас до 1500:\nMTU = 1320\n\n# Через awg2-toolza (v0.7.27+):\nsudo awg2\n# Сервер (1) → п.5 → выбрать AWG 3.1',
+    });
+  }
+
+  // AWG 3.0 → 3.1: два флага уровня устройства
+  if (version.ver === 'AWG 3.0') {
+    steps.push({
+      title: `Шаг ${steps.length + 1}: Обнови до AWG 3.1`,
+      text: 'AWG 3.1 — это та же 3.0 плюс два параметра уровня устройства. RandomTrailers дописывает к пакетам рукопожатия случайный хвост, и их длина перестаёт быть постоянной величиной. DisableCookies запрещает отвечать cookie-пакетами: сервер перестаёт отвечать пакетом известного размера на мусорный init, то есть его нельзя пробить простым зондом (ценой штатной защиты от флуда рукопожатиями). RandomTrailers обязан стоять на обеих сторонах, иначе удлинённые пакеты отбрасываются. Нужны amneziawg-tools и модуль v3.1.20260812 или новее И на сервере, и на клиенте.',
+      cmd: '# В [Interface] сервера и всех клиентов:\nRandomTrailers = on\nDisableCookies = on\n\n# Через awg2-toolza (v0.7.27+):\nsudo awg2\n# Сервер (1) → п.5 → Переключатель 3.0 / 3.1',
     });
   }
 
@@ -1413,8 +1711,11 @@ function buildUpgradePath(iface, version) {
     });
   }
 
-  // H1-H4 диапазоны
-  if (h1 && !h1.isRange && version.ver.includes('AWG')) {
+  // H1-H4 диапазоны — только при ОТКРЫТОМ заголовке (2.0 и ниже).
+  // На 3.x заголовок шифруется HeaderProtectionKey целиком, диапазоны H там —
+  // цена без выигрыша: генератор awg2.sh v0.7.27 сам ставит 1/2/3/4.
+  const hpkUp = getStr(iface, 'headerprotectionkey');
+  if (h1 && !h1.isRange && version.ver.includes('AWG') && !hpkUp) {
     steps.push({
       title: `Шаг ${steps.length + 1}: Переделай H1-H4 в диапазоны`,
       text: 'H1-H4 как одиночные числа работают, но каждое соединение использует одно и то же значение. DPI может их запомнить. Диапазоны дают уникальный magic каждый handshake.',
@@ -1439,7 +1740,8 @@ function buildUpgradePath(iface, version) {
 //  VERDICT
 // ═══════════════════════════════════════════════════════════
 function getVerdict(s, ver) {
-  const topLabel = ver === 'AWG 3.0' ? 'AWG 3.0 с header protection и полноценным CPS' :
+  const topLabel = ver === 'AWG 3.1' ? 'AWG 3.1 с header protection, случайными хвостами рукопожатий и полноценным CPS' :
+    ver === 'AWG 3.0' ? 'AWG 3.0 с header protection и полноценным CPS' :
     ver === 'AWG 2.0' ? 'AWG 2.0 с полноценным CPS' : 'AWG с полноценной обфускацией';
   if (s >= 88) return { l: '🛡 Максимальная защита', c: '#a855f7', bg: '#2e1a4e22', t: `${topLabel}. Трафик неотличим от реального протокола. Высочайшая устойчивость к DPI.` };
   if (s >= 70) return { l: '✅ Хорошая защита', c: '#4ade80', bg: '#14532d11', t: 'Надёжная конфигурация AWG. Есть параметры для улучшения — проверьте рекомендации ниже.' };
@@ -1597,12 +1899,20 @@ function analyze() {
     ['h1/h2/h3/h4', [iface.h1, iface.h2, iface.h3, iface.h4].map(v => v ?? '—').join(' / ')],
     ['i1', iface.i1 ? iface.i1.slice(0, 40) + (iface.i1.length > 40 ? '…' : '') : '—'],
     ['i2-i5', ['i2','i3','i4','i5'].filter(k => iface[k]).length + ' шт' || '—'],
+    ['headerprotectionkey', iface.headerprotectionkey ? iface.headerprotectionkey.slice(0, 16) + '…' : '—'],
+    ['contentpadding', iface.contentpaddingaddition || '—'],
+    ['rekey/reject', [iface.rekeyaftertime, iface.rejectaftertime].some(v => v) ? [iface.rekeyaftertime, iface.rejectaftertime].map(v => v ?? '—').join(' / ') : '—'],
+    ['rekeytimeout', iface.rekeytimeout || '—'],
+    ['keepalivetimeout', iface.keepalivetimeout || '—'],
+    ['maxhandshake', iface.maxhandshakeattempts || '—'],
+    ['randomtrailers', iface.randomtrailers || '—'],
+    ['disablecookies', iface.disablecookies || '—'],
     ['endpoint', peer.endpoint || '—'],
     ['publickey', peer.publickey ? peer.publickey.slice(0, 16) + '…' : '—'],
     ['allowedips', peer.allowedips || '—'],
     ['keepalive', peer.persistentkeepalive || '—'],
   ].filter(([, v]) => v && v !== '—');
-  parsedEl.innerHTML = prows.map(([k, v]) => `<span>${k.padEnd(14)}</span>= ${esc(v)}`).join('\n');
+  parsedEl.innerHTML = prows.map(([k, v]) => `<span>${k.padEnd(20)}</span>= ${esc(v)}`).join('\n');
 
   // Checks
   const cats = [...new Set(checks.map(c => c.cat))];
@@ -1613,7 +1923,7 @@ function analyze() {
         <div class="check-item ${c.status}">
           <div class="check-icon">${icons[c.status] || 'i'}</div>
           <div class="check-body">
-            <div class="check-title">${c.title}</div>
+            <div class="check-title">${esc(c.title)}</div>
             <div class="check-value">${esc(c.value)}</div>
             <div class="check-detail">${c.detail}</div>
           </div>
