@@ -37,6 +37,7 @@ textarea::placeholder{color:#1e3a5f;}
 .ver-20{background:#2e1a4e;color:#d8b4fe;border:1px solid #7c3aed;}
 .ver-30{background:#1a2e2a;color:#5eead4;border:1px solid #0d9488;}
 .ver-31{background:#082f36;color:#67e8f9;border:1px solid #0891b2;}
+.ver-obf{background:#2a1a06;color:#fdba74;border:1px solid #ea580c;}
 .ver-desc{color:#94a3b8;font-size:.85rem;line-height:1.5;flex:1;min-width:200px;}
 .ver-level{display:inline-block;margin-left:8px;padding:3px 10px;border-radius:6px;font-size:.72rem;font-weight:700;background:#312e81;color:#c4b5fd;}
 
@@ -76,6 +77,12 @@ textarea::placeholder{color:#1e3a5f;}
 .fix-severity.high{background:#451a03;color:#fcd34d;}
 .fix-severity.med{background:#1e1b4b;color:#a5b4fc;}
 .fix-severity.low{background:#111827;color:#64748b;}
+.notes{background:#0b1220;border:1px solid #1e3a5f;border-radius:10px;padding:14px 16px;margin-bottom:16px;display:none;}
+.notes-title{font-size:.78rem;text-transform:uppercase;letter-spacing:.08em;color:#7dd3fc;margin-bottom:10px;font-weight:700;}
+.note-item{color:#94a3b8;font-size:.85rem;line-height:1.55;padding:4px 0;}
+.note-item + .note-item{border-top:1px solid #1e293b;}
+body.light .notes{background:#f0f7ff;border-color:#bfdbfe;}
+body.light .note-item{color:#334155;}
 
 /* Upgrade path — как усилить */
 .upgrade{display:none;background:#0a0f1e;border:1px solid #1e3a5f;border-radius:10px;padding:14px 16px;margin-bottom:16px;}
@@ -144,10 +151,11 @@ body.light .check-title{color:#0f172a;}
     <h1 id="themeToggle" style="cursor:pointer">🛡 AmneziaWG Analyzer</h1>
     <p>Определение версии · Анализ параметров · DPI защита · Рекомендации</p>
     <div class="subline">Поддержка: WireGuard · AWG 1.0 · AWG 1.5 · AWG 2.0 · AWG 3.0 · AWG 3.1 (CPS chain, HeaderProtection, RandomTrailers)</div>
+    <div class="subline">WG + обфускатор: Phobos ([instance], phobos://) · wg-obfuscator ClusterM · ключи vpn:// AmneziaVPN · ссылки wireguard:// · WARP</div>
   </header>
 
   <div class="drop-zone" id="dropZone">
-    <label>AWG / WireGuard .conf конфиг — или перетащите файл</label>
+    <label>AWG / WireGuard .conf, конфиг wg-obfuscator / Phobos или ссылка phobos:// · vpn:// · wireguard:// — или перетащите файл</label>
     <textarea id="configInput" placeholder="[Interface]
 PrivateKey = <base64>
 Address = 10.45.12.2/32
@@ -227,6 +235,12 @@ PersistentKeepalive = 21-29"></textarea>
     <div id="autofixList"></div>
   </div>
 
+  <!-- Напоминания — не ошибки, а правила, о которых легко забыть -->
+  <div class="notes" id="notesBox">
+    <div class="notes-title">📌 Напоминания</div>
+    <div id="notesList"></div>
+  </div>
+
   <!-- Upgrade path — как усилить -->
   <div class="upgrade" id="upgradeBox">
     <div class="upgrade-title">🚀 Как усилить защиту</div>
@@ -248,22 +262,34 @@ function parseAWG(raw) {
   if (!raw) throw new Error('Пустой конфиг');
 
   const cfg = { iface: {}, peer: {} };
+  // Все секции: кроме [Interface]/[Peer] это [instance] (Phobos) и экземпляры
+  // wg-obfuscator ([main], [имя]). Разбираем первый [Peer], остальные считаем.
+  const sections = {};
+  let peers = 0;
   let section = null;
 
   raw.split('\n').forEach(line => {
     line = line.trim();
-    if (!line || line.startsWith('#')) return;
-    const sm = line.match(/^\[(\w+)\]$/);
-    if (sm) { section = sm[1].toLowerCase(); return; }
+    if (!line || line.startsWith('#') || line.startsWith(';')) return;
+    const sm = line.match(/^\[([^\]]+)\]$/);
+    if (sm) {
+      section = sm[1].trim().toLowerCase();
+      if (section === 'peer') { peers++; if (peers > 1) section = 'peer#' + peers; }
+      if (!sections[section]) sections[section] = {};
+      return;
+    }
     const em = line.match(/^([^=]+?)\s*=\s*(.*)$/);
     if (!em || !section) return;
     const k = em[1].trim(), v = em[2].trim();
     if (section === 'interface') cfg.iface[k] = v;
     else if (section === 'peer') cfg.peer[k] = v;
+    sections[section][k.toLowerCase()] = v;
   });
 
-  if (!cfg.iface.PrivateKey && !cfg.iface.privatekey && !raw.includes('[Interface]')) {
-    throw new Error('Не найдена секция [Interface]. Вставьте .conf файл AmneziaWG / WireGuard.');
+  const hasObfSection = Object.entries(sections).some(([n, sec]) =>
+    n !== 'interface' && !n.startsWith('peer') && (n === 'instance' || looksLikeObf(sec)));
+  if (!cfg.iface.PrivateKey && !cfg.iface.privatekey && !raw.includes('[Interface]') && !hasObfSection) {
+    throw new Error('Не найдена секция [Interface]. Вставьте .conf AmneziaWG / WireGuard, конфиг wg-obfuscator / Phobos или ссылку phobos:// · vpn:// · wireguard://');
   }
 
   // Normalize keys (case-insensitive)
@@ -272,7 +298,7 @@ function parseAWG(raw) {
   const peer = {};
   Object.keys(cfg.peer).forEach(k => { peer[k.toLowerCase()] = cfg.peer[k]; });
 
-  return { iface, peer };
+  return { iface, peer, sections, peers, hasWg: raw.includes('[Interface]') || Object.keys(iface).length > 0 };
 }
 
 function getInt(obj, key, def = null) {
@@ -616,7 +642,8 @@ function detectToolzaProfile(iface, i1Proto, iCount) {
 
   // Есть только I1, I2-I5 нет
   if (i1Proto === 'DNS') {
-    return { name: 'Lite', detail: 'I1=DNS', cls: 'pf-lite' };
+    // DNS-мимикрия бывает и у Lite, и у Pro L2/dns — наверняка не сказать
+    return { name: 'Lite / Pro', detail: 'I1=DNS', cls: 'pf-lite', uncertain: true };
   }
   if (i1Proto === 'QUIC') {
     return { name: 'Standard', detail: 'I1=QUIC', cls: 'pf-std', alt: 'или Pro L2/quic' };
@@ -766,92 +793,53 @@ function detectVersion(iface) {
 //  SUMMARY — что это за конфиг простым языком
 // ═══════════════════════════════════════════════════════════
 function buildSummary(iface, peer, version) {
+  // Коротко: одна мысль — одна строка.
   const parts = [];
+  const pill = t => `<span class="pill">${esc(t)}</span>`;
 
-  // Что за версия
-  parts.push(`Это конфиг <strong>${version.ver}</strong>.`);
-
-  // Профиль (Toolza Lite/Standard/Pro или AmneziaVPN) — эвристика
+  // Версия + профиль (эвристика)
+  let head = `<strong>${version.ver}</strong>`;
   if (version.toolzaProfile) {
     const tp = version.toolzaProfile;
-    const hintStyle = 'color:#64748b;font-size:.85em;';
-    const profileLabel = tp.name === 'AmneziaVPN' ? 'Источник' : 'Профиль Toolza';
-    let line = `${profileLabel}: <strong>${tp.name}</strong> <span class="pill">${tp.detail}</span>`;
-    if (tp.alt) line += ` <span style="${hintStyle}">(${tp.alt})</span>`;
-    if (tp.uncertain) line += ` <span style="${hintStyle}">(определено эвристикой)</span>`;
-    parts.push(line + '.');
+    const hint = tp.uncertain || tp.alt ? ' <span style="color:#64748b;font-size:.85em;">(по эвристике)</span>' : '';
+    head += ` · ${tp.name === 'AmneziaVPN' ? 'из' : 'профиль'} <strong>${esc(tp.name)}</strong> ${pill(tp.detail)}${hint}`;
   }
+  parts.push(head);
 
-  // Кратко по функциональности
+  // Обфускация
+  const cps = version.protocol && version.protocol !== 'Custom' ? `, CPS — <strong>${esc(version.protocol)}</strong>` : '';
   if (version.ver === 'WireGuard') {
-    parts.push('Обычный WireGuard без обфускации — все пакеты видны как WireGuard, DPI может заблокировать.');
+    parts.push('Без обфускации — DPI видит WireGuard.');
   } else if (version.ver === 'AWG 3.0' || version.ver === 'AWG 3.1') {
     const a3 = version.awg3 || {};
-    parts.push(`Уровень обфускации: <span class="pill">${version.obfLevel || 'AWG 2.0 база + HeaderProtection'}</span>.`);
-    if (version.protocol && version.protocol !== 'Custom') {
-      parts.push(`CPS имитирует <strong>${version.protocol}</strong>.`);
-    }
-    if (a3.hpk) {
-      parts.push('Заголовок WireGuard-пакета шифруется целиком, вместе с типом сообщения — поэтому <strong>H1-H4 = 1/2/3/4 здесь норма</strong>, а не сигнатура: подменять под шифром нечего. Так же их оставляет и официальный клиент Amnezia на 3.1.');
-    }
+    parts.push(`Обфускация: ${pill(version.obfLevel || 'база + HeaderProtection')}${cps}.`);
+    if (a3.hpk) parts.push('H1-H4 = 1/2/3/4 — норма: заголовок зашифрован.');
     const on31 = Object.values(a3.flags || {}).filter(f => f.valid && f.on).map(f => f.name);
-    if (on31.length) {
-      parts.push(`Включены параметры 3.1: <span class="pill">${on31.join('</span> <span class="pill">')}</span>.`);
-    }
-    if (a3.is31) {
-      parts.push('⚠️ Конфиг требует <strong>amneziawg-tools и модуль v3.1.20260812 или новее</strong> И на сервере, и на клиенте: более старый клиент такой конфиг даже не прочитает — неизвестный ключ отвергается целиком. В приложении AmneziaVPN поддержка 3.1 с версии <strong>5.0.1.5</strong>, прошивки роутеров её пока не умеют.');
-    } else {
-      parts.push('⚠️ Нужны amneziawg-tools v3.0.20260730+ и модуль v3.0.20260805+ на обеих сторонах. Приложение AmneziaVPN до 5.0.0.5 переносит Jc/Jmin/Jmax/S1-S4/H1-H4/I1-I5, но выбрасывает HeaderProtectionKey при импорте — без него подключение молча зависает.');
-    }
-    if (a3.sTooSmall) {
-      parts.push('⚠️ S1-S4 меньше 12 — см. рекомендации ниже, защита заголовков не поднимется.');
-    }
-  } else if (version.ver === 'AWG 2.0') {
-    parts.push(`Уровень обфускации: <span class="pill">${version.obfLevel}</span>.`);
-    if (version.protocol && version.protocol !== 'Custom') {
-      parts.push(`CPS имитирует <strong>${version.protocol}</strong> — трафик выглядит как реальный ${version.protocol} handshake.`);
-    }
-  } else if (version.ver === 'AWG 1.5') {
-    parts.push(`Обфускация AWG 1.5 с CPS. Имитация: <strong>${version.protocol}</strong>.`);
+    if (on31.length) parts.push(`3.1: ${on31.map(pill).join(' ')}.`);
+    parts.push(a3.is31
+      ? '📌 Нужны tools и модуль <strong>v3.1.20260812+</strong> на обеих сторонах. Для 3.1: AmneziaVPN 5.0.1.5+; Keenetic — прошивка 5.2.11 (alpha)+ или AWG Manager (2.0 и 3.0 на Keenetic работают и так).'
+      : '📌 Нужны tools v3.0.20260730+ и модуль v3.0.20260805+ на обеих сторонах. AmneziaVPN до 5.0.0.5 теряет HeaderProtectionKey.');
+    if (a3.sTooSmall) parts.push('⚠️ S1-S4 меньше 12 — защита заголовков не поднимется.');
+  } else if (version.ver === 'AWG 2.0' || version.ver === 'AWG 1.5') {
+    parts.push(`Обфускация: ${pill(version.obfLevel || version.ver)}${cps}.`);
   } else {
-    parts.push('Базовая обфускация без CPS мимикрии.');
+    parts.push('Базовая обфускация, без CPS.');
   }
 
-  // Какой у нас сервер
+  // Сервер · маршрутизация · DNS · MTU — одной строкой
+  const net = [];
   const endpoint = getStr(peer, 'endpoint');
-  if (endpoint) {
-    const epParts = endpoint.split(':');
-    const port = epParts[epParts.length - 1];
-    const host = epParts.slice(0, -1).join(':').replace(/^\[|\]$/g, '');
-    const isIP = /^\d{1,3}(\.\d{1,3}){3}$/.test(host) || host.includes(':');
-    parts.push(`Сервер: <span class="pill">${host}:${port}</span> (${isIP ? 'IP' : 'домен'}).`);
-  }
-
-  // Маршрутизация
+  if (endpoint) net.push(`сервер ${pill(endpoint)}`);
   const allowed = getStr(peer, 'allowedips');
-  const fullTunnel = allowed.includes('0.0.0.0/0');
-  const ipv6Tunnel = allowed.includes('::/0');
-  if (fullTunnel && ipv6Tunnel) {
-    parts.push('Режим: <strong>полный туннель</strong> — весь трафик (IPv4+IPv6) через VPN.');
-  } else if (fullTunnel) {
-    parts.push('Режим: <strong>IPv4 туннель</strong> — только IPv4 через VPN, <span class="pill">возможна утечка IPv6</span>.');
-  } else if (allowed) {
-    parts.push(`Режим: <strong>split-tunnel</strong> — только <span class="pill">${allowed}</span> через VPN.`);
-  }
-
-  // DNS
+  const full4 = allowed.includes('0.0.0.0/0'), full6 = allowed.includes('::/0');
+  if (full4 && full6) net.push('весь трафик через VPN');
+  else if (full4) net.push('только IPv4 через VPN (IPv6 мимо)');
+  else if (allowed) net.push('split-tunnel');
   const dns = getStr(iface, 'dns');
-  if (dns) {
-    parts.push(`DNS: <span class="pill">${dns}</span>.`);
-  } else {
-    parts.push('<strong>DNS не задан</strong> — риск DNS leak.');
-  }
-
-  // MTU
+  net.push(dns ? `DNS ${pill(dns)}` : '<strong>DNS не задан</strong>');
   const mtu = getInt(iface, 'mtu', null);
-  if (mtu) {
-    parts.push(`MTU: <span class="pill">${mtu}</span>.`);
-  }
+  if (mtu) net.push(`MTU ${pill(mtu)}`);
+  parts.push(net.join(' · ') + '.');
 
   return parts.map(p => `<div class="summary-line">${p}</div>`).join('');
 }
@@ -861,8 +849,9 @@ function buildSummary(iface, peer, version) {
 // ═══════════════════════════════════════════════════════════
 function runChecks(iface, peer, version) {
   const R = [];
-  const push = (cat, title, status, value, detail, pts, max) =>
-    R.push({ cat, title, status, value: String(value), detail, pts, max });
+  // note — текст для блока «📌 Напоминания»: правило «как должно быть», не поломка.
+  const push = (cat, title, status, value, detail, pts, max, note) =>
+    R.push({ cat, title, status, value: String(value), detail, pts, max, note });
 
   const Jc = getInt(iface, 'jc', null);
   const Jmin = getInt(iface, 'jmin', null);
@@ -891,10 +880,11 @@ function runChecks(iface, peer, version) {
 
   const psk = getStr(peer, 'presharedkey');
   const pskOk = psk && isBase64(psk);
-  push('Ключи', 'PresharedKey', pskOk ? 'pass' : 'warn', pskOk ? psk.slice(0, 12) + '…' : '(отсутствует)',
+  push('Ключи', 'PresharedKey', pskOk ? 'pass' : 'info', pskOk ? psk.slice(0, 12) + '…' : '(отсутствует)',
     pskOk ? 'PresharedKey задан — дополнительный слой симметричного шифрования (post-quantum устойчивость)' :
-      'PresharedKey отсутствует — дополнительная защита от будущих квантовых атак не активна',
-    pskOk ? 6 : 2, 6);
+      'PresharedKey не задан — туннель работает, но без дополнительного слоя симметричного шифрования (защита от будущих квантовых атак)',
+    pskOk ? 6 : 2, 6,
+    pskOk ? null : '<strong>PresharedKey</strong> — желательно задавать: дополнительный слой симметричного шифрования поверх Noise (post-quantum). Один и тот же ключ у сервера и клиента.');
 
   // ── AWG 3.x: параметры уровня устройства ──────────────────
   const awg3p = parseAwg3(iface);
@@ -1001,7 +991,7 @@ function runChecks(iface, peer, version) {
     // Совместимость клиента
     push(CAT3, 'Требования к клиенту', 'info', verLabel,
       awg3p.has31
-        ? 'Конфиг содержит ключи 3.1 — нужны amneziawg-tools и модуль v3.1.20260812 или новее И на сервере, и на клиенте. Клиент постарше не прочитает конфиг вовсе: неизвестный ключ отвергается целиком.'
+        ? 'Ключи 3.1: tools и модуль v3.1.20260812+ на обеих сторонах, старый клиент конфиг не прочитает. Для 3.1: AmneziaVPN 5.0.1.5+; Keenetic — прошивка 5.2.11 (alpha)+ или AWG Manager (2.0 и 3.0 на Keenetic работают и так).'
         : 'Конфиг содержит ключи 3.0 — нужны amneziawg-tools v3.0.20260730+ и модуль v3.0.20260805+ на обеих сторонах. Основной AmneziaVPN до 5.0.1.5 такой конфиг импортирует без HeaderProtectionKey, и подключение молча зависает.',
       0, 0);
   }
@@ -1022,7 +1012,7 @@ function runChecks(iface, peer, version) {
     const jmaxOk = Jmax !== null && Jmax >= Jmin && Jmax <= 1280;
     // Узкий диапазон — норма для DNS-мимикрии (Lite и AmneziaVPN)
     const pname = version && version.toolzaProfile && version.toolzaProfile.name;
-    const narrowOk = pname === 'Lite' || pname === 'AmneziaVPN';
+    const narrowOk = (pname || '').startsWith('Lite') || pname === 'AmneziaVPN';
     const rangeWide = jminOk && jmaxOk && (Jmax - Jmin) >= 50;
     const jrangeOk = jminOk && jmaxOk && (rangeWide || narrowOk);
 
@@ -1342,13 +1332,14 @@ function runChecks(iface, peer, version) {
   const dnsOk = !!dns;
   const dnsPrivate = /10\.|192\.168\.|172\.(1[6-9]|2\d|3[01])\./.test(dns);
   const dnsPublicGood = ['1.1.1.1', '8.8.8.8', '9.9.9.9', '208.67.222.222', '94.140.14.14', '77.88.8.8'].some(d => dns.includes(d));
-  push('Маршрутизация', 'DNS', dnsOk ? (dnsPrivate || dnsPublicGood ? 'pass' : 'warn') : 'fail',
+  push('Маршрутизация', 'DNS', dnsOk ? (dnsPrivate || dnsPublicGood ? 'pass' : 'info') : 'fail',
     dns || '(не задан)',
     !dnsOk ? 'DNS не задан — запросы идут мимо VPN, полный DNS leak' :
     dnsPrivate ? `Приватный DNS (${dns}) — запросы через туннель, нет утечки` :
     dnsPublicGood ? `${dns} — публичный DNS, работает через туннель` :
     `${dns} — нестандартный DNS, проверь что запросы идут через туннель`,
-    dnsOk ? (dnsPrivate ? 6 : dnsPublicGood ? 4 : 3) : 0, 6);
+    dnsOk ? (dnsPrivate ? 6 : dnsPublicGood ? 4 : 3) : 0, 6,
+    dnsOk && !dnsPrivate && !dnsPublicGood ? `<strong>DNS = ${esc(dns)}</strong> — адрес должен быть доступен через туннель (попадать в AllowedIPs), иначе запросы пойдут мимо VPN.` : null);
 
   // ── MTU ─────────────────────────────────────────────────
   const mtu = getInt(iface, 'mtu', null);
@@ -1386,8 +1377,9 @@ function runChecks(iface, peer, version) {
         headroomOk ? 4 : 1, 4);
     }
   } else {
-    push('Сеть', 'MTU', 'warn', '(не задан)',
-      'MTU не задан — будет использован дефолт 1420, но для AWG 2.0 лучше указать 1320', 1, 4);
+    push('Сеть', 'MTU', 'info', '(не задан)',
+      'MTU не задан — клиент возьмёт 1420', 1, 4,
+      '<strong>MTU</strong> лучше задавать явно: без него клиент берёт 1420, а для AWG 2.0 + CPS оптимум <code class="fix-code">MTU = 1320</code>.');
   }
 
   // Keepalive — AWG 3.0 допускает диапазон "22-30" (клиент выбирает случайное
@@ -1526,7 +1518,8 @@ function buildFixes(checks, iface, peer, version) {
   // RandomTrailers обязан совпадать на обеих сторонах
   const rtF = awg3f.flags['randomtrailers'];
   if (rtF && rtF.valid && rtF.on) {
-    add('low', 'RandomTrailers включён — параметр уровня устройства: то же значение обязано стоять на сервере, иначе сторона без него отбросит удлинённые пакеты рукопожатия и подключение просто не установится.');
+    // Не ошибка, а правило, о котором легко забыть: в «Напоминания», а не в «срочно».
+    add('note', '<strong>RandomTrailers = on</strong> — параметр уровня устройства: на сервере должен стоять тот же. Сторона без него отбрасывает удлинённые пакеты рукопожатия, и подключение не устанавливается.');
   }
 
   // H1-H4 default — сигнатура только при ОТКРЫТОМ заголовке.
@@ -1600,7 +1593,7 @@ function buildFixes(checks, iface, peer, version) {
     // Узкий диапазон — норма для DNS-мимикрии (Lite и AmneziaVPN):
     // DNS-пакеты маленькие и предсказуемого размера
     const pname = version && version.toolzaProfile && version.toolzaProfile.name;
-    const narrowOk = pname === 'Lite' || pname === 'AmneziaVPN';
+    const narrowOk = (pname || '').startsWith('Lite') || pname === 'AmneziaVPN';
     if (!narrowOk) {
       add('med', `Jmin-Jmax диапазон слишком узкий (${Jmin}-${Jmax}). Расширь до ≥50 байт разницы.`);
     }
@@ -1611,9 +1604,7 @@ function buildFixes(checks, iface, peer, version) {
     add('high', 'Это чистый WireGuard без обфускации. Используй AmneziaWG — добавит Jc/S/H/I параметры.');
   }
 
-  if (version.ver === 'AWG 1.0' || version.ver === 'AWG 1.5') {
-    add('low', 'Обнови до AWG 2.0: добавь S3/S4 и переделай H1-H4 в диапазоны.');
-  }
+  // AWG 1.x → 2.0 — это «Как усилить защиту» (шаг там есть), не срочная поломка
 
   const pubEndpoint = getStr(peer, 'endpoint');
   if (pubEndpoint) {
@@ -1624,13 +1615,8 @@ function buildFixes(checks, iface, peer, version) {
     }
   }
 
-  if (mtu === null) {
-    add('low', 'Задай <code class="fix-code">MTU = 1320</code> — оптимум для AWG 2.0 + CPS.');
-  }
+  // MTU не задан и нет PresharedKey — это «📌 Напоминания» (note из проверок), не «срочно»
 
-  if (!getStr(peer, 'presharedkey')) {
-    add('low', 'Добавь PresharedKey — дополнительный слой симметричного шифрования (post-quantum устойчивость).');
-  }
 
   return fixes;
 }
@@ -1740,6 +1726,12 @@ function buildUpgradePath(iface, version) {
 //  VERDICT
 // ═══════════════════════════════════════════════════════════
 function getVerdict(s, ver) {
+  if (ver && ver.startsWith('WG + ')) {
+    if (s >= 85) return { l: '🛡 Сильная маскировка', c: '#a855f7', bg: '#2e1a4e22', t: 'WireGuard за обфускатором: сигнатуры WireGuard нет, трафик выглядит как STUN. Связка настроена правильно.' };
+    if (s >= 65) return { l: '✅ Рабочая связка', c: '#4ade80', bg: '#14532d11', t: 'Обфускатор настроен, но есть что улучшить — см. рекомендации.' };
+    if (s >= 40) return { l: '⚠️ Есть проблемы', c: '#f59e0b', bg: '#78350f11', t: 'Связка поднимется не везде или слабо маскируется — проверь рекомендации.' };
+    return { l: '🔴 Связка не работает', c: '#ef4444', bg: '#450a0a22', t: 'Есть критические ошибки — туннель не поднимется или пойдёт мимо обфускатора.' };
+  }
   const topLabel = ver === 'AWG 3.1' ? 'AWG 3.1 с header protection, случайными хвостами рукопожатий и полноценным CPS' :
     ver === 'AWG 3.0' ? 'AWG 3.0 с header protection и полноценным CPS' :
     ver === 'AWG 2.0' ? 'AWG 2.0 с полноценным CPS' : 'AWG с полноценной обфускацией';
@@ -1757,7 +1749,7 @@ function dpiLabel(d) {
 }
 
 function profileColor(name) {
-  if (name === 'Lite') return '#fbbf24';        // amber
+  if ((name || '').startsWith('Lite')) return '#fbbf24';   // amber
   if (name === 'Standard') return '#60a5fa';    // blue
   if (name === 'Pro') return '#34d399';         // emerald
   if (name === 'AmneziaVPN') return '#f472b6';  // pink (бренд Amnezia)
@@ -1772,9 +1764,536 @@ function renderMini(label, val, color, suffix = '') {
 }
 
 // ═══════════════════════════════════════════════════════════
+//  ВХОДНЫЕ ФОРМАТЫ: ссылки phobos:// · vpn:// · wireguard://
+// ═══════════════════════════════════════════════════════════
+// Всё раскрывается здесь же, в браузере: ни один байт никуда не уходит.
+
+function b64urlToBytes(s) {
+  s = s.replace(/\s+/g, '').replace(/-/g, '+').replace(/_/g, '/');
+  while (s.length % 4) s += '=';
+  const bin = atob(s);
+  const out = new Uint8Array(bin.length);
+  for (let i = 0; i < bin.length; i++) out[i] = bin.charCodeAt(i);
+  return out;
+}
+
+async function inflateZlib(bytes) {
+  // zlib-обёртка («deflate» в терминах DecompressionStream)
+  const ds = new DecompressionStream('deflate');
+  const stream = new Blob([bytes]).stream().pipeThrough(ds);
+  return new Uint8Array(await new Response(stream).arrayBuffer());
+}
+
+// phobos://<base64url(conf)>#<имя> (формат Phobos v1; префикс «v2.» — чужой)
+function decodePhobosLink(link) {
+  const rest = link.trim().slice('phobos://'.length);
+  const hash = rest.indexOf('#');
+  const payload = hash >= 0 ? rest.slice(0, hash) : rest;
+  let name = hash >= 0 ? rest.slice(hash + 1) : '';
+  try { name = decodeURIComponent(name); } catch (e) { /* имя как есть */ }
+  if (/^v\d+\./.test(payload)) throw new Error('phobos://-ссылка неизвестной версии (' + payload.split('.')[0] + ')');
+  let text;
+  try { text = new TextDecoder().decode(b64urlToBytes(payload)); }
+  catch (e) { throw new Error('phobos://: не удалось раскодировать base64'); }
+  // «ключ = none» дописывает производитель ссылки для пустых полей
+  text = text.split('\n').filter(l => !/=\s*none\s*$/i.test(l)).join('\n');
+  return { text, name };
+}
+
+// vpn://<base64url(qCompress(JSON))> — ключ AmneziaVPN. qCompress = 4 байта
+// длины (big-endian) + zlib. Внутри JSON с контейнерами; конфиг WireGuard/AWG
+// лежит в <контейнер>.last_config (строка-JSON с полем config).
+async function decodeVpnLink(link) {
+  const bytes = b64urlToBytes(link.trim().slice('vpn://'.length));
+  // Как importController.cpp AmneziaVPN: qUncompress, а если не вышло — как есть.
+  let data = bytes;
+  if (bytes.length > 4 && typeof DecompressionStream !== 'undefined') {
+    try { data = await inflateZlib(bytes.slice(4)); } catch (e) { /* без сжатия */ }
+  }
+  const txt = new TextDecoder().decode(data);
+  // Внутри бывает и голый текст конфига WireGuard/AWG
+  if (/^\s*\[Interface\]/m.test(txt) && !/^\s*\{/.test(txt)) {
+    return { text: txt, name: '', container: 'текст конфига', total: 1 };
+  }
+  let json = null;
+  try { json = JSON.parse(txt); } catch (e) { /* ниже — ошибка */ }
+  if (!json) throw new Error('vpn://: не удалось раскрыть ключ AmneziaVPN (ожидается qCompress + JSON или текст конфига)');
+
+  const found = [];
+  const walk = (o, container) => {
+    if (!o || typeof o !== 'object') return;
+    if (typeof o.container === 'string') container = o.container;
+    for (const [k, v] of Object.entries(o)) {
+      if (k === 'last_config' && typeof v === 'string') {
+        let cfg = v;
+        try { const lc = JSON.parse(v); if (lc && typeof lc.config === 'string') cfg = lc.config; } catch (e) { /* уже текст */ }
+        if (cfg.includes('[Interface]')) found.push({ container: container || '?', config: cfg });
+      } else if (typeof v === 'object') walk(v, container);
+    }
+  };
+  walk(json, null);
+  if (!found.length) {
+    const cs = (json.containers || []).map(c => c.container).filter(Boolean);
+    throw new Error('vpn://: в ключе нет конфига WireGuard/AWG' + (cs.length ? ' (контейнеры: ' + cs.join(', ') + ')' : '') +
+      '. Анализатор разбирает только протоколы семейства WireGuard.');
+  }
+  // Подстановки AmneziaVPN, которые клиент заполняет сам при импорте
+  const dns1 = json.dns1 || '1.1.1.1', dns2 = json.dns2 || '1.0.0.1';
+  const pick = found.find(f => /awg/i.test(f.container)) || found[0];
+  const text = pick.config.replace(/\$PRIMARY_DNS/g, dns1).replace(/\$SECONDARY_DNS/g, dns2);
+  return { text, name: json.description || '', container: pick.container, total: found.length };
+}
+
+// wireguard://<privkey>@host:port?publickey=..&address=..&mtu=..&presharedkey=..&reserved=..#имя
+// (v2rayN / Hiddify / sing-box / NekoBox). Собираем обычный .conf.
+function decodeWireguardUri(uri) {
+  const u = new URL(uri.trim().replace(/^(wg|wireguard):\/\//i, 'http://'));
+  const q = k => u.searchParams.get(k) || u.searchParams.get(k.toLowerCase()) || '';
+  const priv = decodeURIComponent(u.username || '');
+  const host = u.hostname.replace(/^\[|\]$/g, '');
+  const lines = ['[Interface]'];
+  if (priv) lines.push('PrivateKey = ' + priv);
+  if (q('address') || q('ip')) lines.push('Address = ' + (q('address') || q('ip')));
+  if (q('dns')) lines.push('DNS = ' + q('dns'));
+  if (q('mtu')) lines.push('MTU = ' + q('mtu'));
+  lines.push('', '[Peer]');
+  if (q('publickey') || q('publicKey')) lines.push('PublicKey = ' + (q('publickey') || q('publicKey')));
+  if (q('presharedkey') || q('preSharedKey')) lines.push('PresharedKey = ' + (q('presharedkey') || q('preSharedKey')));
+  lines.push('Endpoint = ' + (host.includes(':') ? `[${host}]` : host) + ':' + (u.port || '51820'));
+  lines.push('AllowedIPs = ' + (q('allowedips') || q('allowedIPs') || '0.0.0.0/0, ::/0'));
+  if (q('keepalive')) lines.push('PersistentKeepalive = ' + q('keepalive'));
+  let name = u.hash ? u.hash.slice(1) : '';
+  try { name = decodeURIComponent(name); } catch (e) { /* как есть */ }
+  return { text: lines.join('\n'), name, reserved: q('reserved') };
+}
+
+// Приводит ввод к тексту конфига. source — откуда он взялся (для баннера).
+async function normalizeInput(raw) {
+  const t = raw.trim();
+  const firstLine = t.split(/\s+/)[0];
+  if (/^phobos:\/\//i.test(firstLine)) {
+    const r = decodePhobosLink(firstLine);
+    return { text: r.text, source: 'phobos://', sourceNote: r.name ? `ссылка Phobos «${r.name}»` : 'ссылка Phobos' };
+  }
+  if (/^vpn:\/\//i.test(firstLine)) {
+    const r = await decodeVpnLink(firstLine);
+    return { text: r.text, source: 'vpn://',
+      sourceNote: `ключ AmneziaVPN${r.name ? ' «' + r.name + '»' : ''}, контейнер ${r.container}` +
+        (r.total > 1 ? ` (в ключе ${r.total} конфигов, разобран первый AWG)` : '') };
+  }
+  if (/^(wireguard|wg):\/\//i.test(firstLine)) {
+    const r = decodeWireguardUri(firstLine);
+    return { text: r.text, source: 'wireguard://', reserved: r.reserved,
+      sourceNote: `ссылка wireguard://${r.name ? ' «' + r.name + '»' : ''}` };
+  }
+  return { text: t, source: 'conf', sourceNote: '' };
+}
+
+// ═══════════════════════════════════════════════════════════
+//  ОБФУСКАТОР: Phobos ([instance]) и ClusterM wg-obfuscator
+// ═══════════════════════════════════════════════════════════
+// wg-obfuscator — отдельный UDP-посредник на обоих концах: WireGuard ходит в
+// локальный обфускатор (Endpoint = 127.0.0.1:порт), тот XOR-ит пакеты ключом,
+// добавляет мусор и (по желанию) маскирует под STUN, и шлёт на сервер.
+const OBF_KEYS_COMMON = ['source-if', 'source-lport', 'target', 'key', 'masking', 'static-bindings',
+  'verbose', 'max-clients', 'idle-timeout', 'max-dummy', 'fwmark'];
+const OBF_KEYS_CLUSTERM = ['allow-clean', 'in-timeout', 'resolve-interval', 'log-file', 'log-timestamps'];
+const OBF_KEYS_PHOBOS = ['mode', 'role', 'obfuscate-bytes', 'media-pt', 'media-ssrc', 'media-clock', 'threads'];
+const OBF_ALL_KEYS = new Set([...OBF_KEYS_COMMON, ...OBF_KEYS_CLUSTERM, ...OBF_KEYS_PHOBOS]);
+
+// Секция похожа на конфиг обфускатора, если в ней есть его опорные ключи.
+function looksLikeObf(sec) {
+  const k = Object.keys(sec);
+  return k.includes('target') || k.includes('source-lport') || (k.includes('key') && k.includes('masking'));
+}
+
+function buildObf(sections) {
+  const inst = sections.instance;
+  let name = null, params = null, fromInstance = false;
+  if (inst && Object.keys(inst).length) { name = 'instance'; params = inst; fromInstance = true; }
+  else {
+    for (const [n, sec] of Object.entries(sections)) {
+      if (n === 'interface' || n === 'peer') continue;
+      if (looksLikeObf(sec)) { name = n; params = sec; break; }
+    }
+  }
+  if (!params) return null;
+  const keys = Object.keys(params);
+  const hasPhobos = keys.some(k => OBF_KEYS_PHOBOS.includes(k)) ||
+    /^(MEDIA|TLS)$/i.test(params.masking || '') || fromInstance;
+  const hasClusterM = keys.some(k => OBF_KEYS_CLUSTERM.includes(k));
+  const flavor = hasPhobos && !hasClusterM ? 'Phobos' : hasClusterM && !hasPhobos ? 'ClusterM' :
+    hasPhobos && hasClusterM ? 'смешанный' : 'ClusterM';
+  // Где стоит: сервер отдаёт в локальный WireGuard, клиент слушает локально.
+  const target = (params.target || '').trim();
+  const tHost = target.replace(/:\d+$/, '').replace(/^\[|\]$/g, '');
+  const isLocal = h => /^(127\.|localhost$|::1$)/i.test(h);
+  let side = 'клиент';
+  if (isLocal(tHost)) side = 'сервер';
+  else if (!fromInstance && (params['source-if'] || '0.0.0.0') === '0.0.0.0' && !params['source-lport']) side = '?';
+  const extraInstances = Object.entries(sections)
+    .filter(([n, s]) => n !== name && n !== 'interface' && n !== 'peer' && looksLikeObf(s)).map(([n]) => n);
+  return { name, params, flavor, fromInstance, side, target, tHost, extraInstances,
+    unknown: keys.filter(k => !OBF_ALL_KEYS.has(k)) };
+}
+
+// ── IPv4 CIDR арифметика (AllowedIPs «всё, кроме сервера») ──
+function ip4ToInt(ip) {
+  const p = ip.split('.').map(Number);
+  if (p.length !== 4 || p.some(x => !Number.isInteger(x) || x < 0 || x > 255)) return null;
+  return ((p[0] << 24) >>> 0) + (p[1] << 16) + (p[2] << 8) + p[3];
+}
+function parseCidr4(s) {
+  const m = s.trim().match(/^(\d{1,3}(?:\.\d{1,3}){3})(?:\/(\d{1,2}))?$/);
+  if (!m) return null;
+  const base = ip4ToInt(m[1]); const len = m[2] === undefined ? 32 : +m[2];
+  if (base === null || len > 32) return null;
+  const size = 2 ** (32 - len);
+  const start = Math.floor(base / size) * size;
+  return { start, end: start + size - 1 };
+}
+// Сколько IPv4 покрыто списком и покрыт ли адрес ip.
+function coverage4(allowed, ip) {
+  const ranges = allowed.split(',').map(parseCidr4).filter(Boolean).sort((a, b) => a.start - b.start);
+  let total = 0, curS = -1, curE = -2;
+  for (const r of ranges) {
+    if (r.start > curE + 1) { if (curE >= curS && curS >= 0) total += curE - curS + 1; curS = r.start; curE = r.end; }
+    else curE = Math.max(curE, r.end);
+  }
+  if (curS >= 0) total += curE - curS + 1;
+  const ipn = ip ? ip4ToInt(ip) : null;
+  const covers = ipn !== null && ranges.some(r => ipn >= r.start && ipn <= r.end);
+  return { total, covers, count: ranges.length };
+}
+
+// Признаки AWG в [Interface]: с ними обфускатор не работает.
+function awgMarks(iface) {
+  const marks = [];
+  if (getInt(iface, 'jc', 0) > 0) marks.push('Jc');
+  if (getInt(iface, 's1', 0) > 0 || getInt(iface, 's2', 0) > 0) marks.push('S1/S2');
+  ['h1', 'h2', 'h3', 'h4'].forEach((k, i) => {
+    const h = parseHRange(iface, k);
+    if (h && (h.isRange || h.start !== i + 1)) marks.push(k.toUpperCase());
+  });
+  if (iface.i1) marks.push('I1-I5');
+  if (iface.headerprotectionkey) marks.push('HeaderProtectionKey');
+  return [...new Set(marks)];
+}
+
+function runObfChecks(obf, iface, peer, hasWg) {
+  const R = [];
+  const cat = 'Обфускатор (' + obf.flavor + ')';
+  const push = (title, status, value, detail, pts, max, note) =>
+    R.push({ cat, title, status, value: String(value), detail, pts, max, note });
+  const p = obf.params;
+  const masking = (p.masking || 'AUTO').toUpperCase();
+  const client = obf.side !== 'сервер';
+
+  // Режим (Phobos): socks5 — это не туннель WireGuard
+  if (p.mode && !/^(wireguard|wg)$/i.test(p.mode)) {
+    push('mode', 'fail', p.mode, 'mode = ' + esc(p.mode) + ' — SOCKS5-режим Phobos, а не туннель WireGuard. Клиенты WireGuard (в т.ч. AWG Manager) такой конфиг не примут.', 0, 10);
+  }
+
+  // Ключ
+  const key = p.key || '';
+  const weak = /^(test|key|password|secret|12345\d*|qwerty\w*|changeme)$/i.test(key);
+  const keyOk = key.length >= 16 && !weak;
+  push('key', !key ? 'fail' : keyOk ? 'pass' : 'warn', key ? key.slice(0, 6) + '… (' + key.length + ' симв.)' : '(нет)',
+    !key ? 'Ключ обязателен (1–255 символов) и должен совпадать на сервере и клиенте.' :
+    key.length > 255 ? 'Длиннее 255 символов — обфускатор не запустится.' :
+    weak ? 'Ключ из словаря («' + esc(key) + '») — первым делом перебираются именно такие. Сгенерируй случайный из 32 символов.' :
+    key.length < 16 ? `Короткий ключ (${key.length}) — XOR-гамма повторяется чаще, подобрать проще. Рекомендуется 32 случайных символа.` :
+    'Длинный случайный ключ — одинаковый на обоих концах ✓',
+    !key ? 0 : keyOk ? 10 : 4, 10);
+
+  // Маскировка
+  const mDesc = {
+    STUN: 'каждый пакет обёрнут в STUN (ICE, видеозвонки) — на проводе видно «WebRTC», а не неизвестный UDP',
+    MEDIA: 'Phobos: STUN/ICE в начале, дальше RTP — выглядит как медиапоток звонка',
+    NONE: 'только XOR-обфускация: сигнатуры WireGuard нет, но это «случайный UDP с высокой энтропией» — белые списки протоколов его режут',
+    AUTO: client ? 'на стороне клиента AUTO = без маскировки: исходящие пакеты не маскируются вовсе' : 'сервер подстраивается под клиента (STUN или без) — правильная настройка для сервера',
+    TLS: 'TLS — только для SOCKS5-режима Phobos, в режиме WireGuard отвергается',
+  }[masking] || 'неизвестный режим';
+  const mStatus = masking === 'STUN' || masking === 'MEDIA' || (masking === 'AUTO' && !client) ? 'pass' :
+    masking === 'TLS' ? 'fail' : 'warn';
+  push('masking', mStatus, masking, esc(mDesc), mStatus === 'pass' ? 12 : masking === 'TLS' ? 0 : 5, 12);
+
+  if (masking === 'MEDIA' || +p['obfuscate-bytes'] > 0) {
+    push('Совместимость с сервером', 'info',
+      masking === 'MEDIA' ? 'MEDIA' : 'obfuscate-bytes = ' + p['obfuscate-bytes'],
+      'Расширение форка Phobos: работает только с сервером Phobos. С оригинальным wg-obfuscator ClusterM (серверы awg2-toolza, AWG Manager «ClusterM») соединение не поднимается — проверено.',
+      2, 5,
+      `<strong>${masking === 'MEDIA' ? 'masking = MEDIA' : 'obfuscate-bytes'}</strong> — только для сервера Phobos. Если сервер на оригинальном wg-obfuscator (awg2-toolza, AWG Manager «ClusterM»), это должно быть выключено: <code class="fix-code">obfuscate-bytes = 0</code>, <code class="fix-code">masking = STUN</code>.`);
+  }
+  if (+p['obfuscate-bytes'] > 0) {
+    push('obfuscate-bytes', 'warn', p['obfuscate-bytes'],
+      `Обфусцируются только первые ${esc(p['obfuscate-bytes'])} байт пакета, мусор (max-dummy) при этом отключён — меньше нагрузки на слабый роутер, но длины пакетов остаются как у WireGuard.`, 3, 6);
+  }
+
+  // Мусор
+  if (p['max-dummy'] !== undefined) {
+    const md = parseInt(p['max-dummy'], 10);
+    push('max-dummy', isNaN(md) || md < 0 || md > 1024 ? 'fail' : md === 0 ? 'warn' : 'pass', p['max-dummy'],
+      isNaN(md) || md < 0 || md > 1024 ? 'Допустимо 0–1024.' :
+      md === 0 ? 'Мусор к пакетам данных не добавляется — длины пакетов совпадают с WireGuard.' :
+      `До ${md} байт мусора к мелким пакетам (крупные >1024 байт не трогаются) — длины «плывут» ✓`,
+      md > 0 && md <= 1024 ? 6 : md === 0 ? 2 : 0, 6);
+  } else {
+    push('max-dummy', 'info', '4 (по умолчанию)', 'Не задан — по умолчанию до 4 байт мусора к пакетам данных.', 4, 6);
+  }
+
+  // target
+  const tm = obf.target.match(/^(.+):(\d+)$/);
+  const tPort = tm ? +tm[2] : null;
+  const tIsIp = /^\d{1,3}(\.\d{1,3}){3}$/.test(obf.tHost);
+  const tIsV6 = obf.tHost.includes(':');
+  push('target', !tm ? 'fail' : tIsV6 ? 'fail' : 'pass', obf.target || '(нет)',
+    !tm ? 'Нужен формат host:port.' :
+    tIsV6 ? 'IPv6 wg-obfuscator не поддерживает — только IPv4.' :
+    obf.side === 'сервер' ? 'Серверная сторона: отдаёт расшифрованные пакеты локальному WireGuard ✓' :
+    tIsIp ? 'IPv4 сервера ✓' :
+    'Домен: резолвится один раз при старте. Для DDNS добавь resolve-interval (ClusterM) — иначе после смены IP связь не вернётся.',
+    tm && !tIsV6 ? 5 : 0, 5);
+  if (tPort === 51820 || tPort === 51821) {
+    push('Порт сервера', 'warn', tPort, 'Стандартный порт WireGuard — по нему сервер находят сканеры. Любой случайный выше 1024 лучше.', 1, 3);
+  }
+
+  // Клиентская сторона: где слушает
+  if (client && !obf.fromInstance) {
+    const sif = p['source-if'] || '0.0.0.0';
+    const sLoc = /^127\./.test(sif);
+    push('source-if', sLoc ? 'pass' : 'warn', sif,
+      sLoc ? 'Слушает только локально ✓' :
+      'Слушает на всех адресах — порт обфускатора виден в локальной сети. На клиенте достаточно 127.0.0.1.', sLoc ? 3 : 1, 3);
+  }
+  if (p['allow-clean'] && /^(1|true|on|yes)$/i.test(p['allow-clean'])) {
+    push('allow-clean', client ? 'fail' : 'warn', p['allow-clean'],
+      client ? 'Только для сервера: на клиенте ломает определение направления — свои же пакеты считаются «чистым клиентом».' :
+      'Сервер пускает клиентов без обфускатора — их трафик DPI видит как обычный WireGuard. Порт обфускатора при этом отвечает и на голый WireGuard, что выдаёт сервер активному зонду.',
+      client ? 0 : 2, 4);
+    if (p['static-bindings']) push('static-bindings + allow-clean', 'fail', 'несовместимо', 'Обфускатор не запустится с обоими параметрами.', 0, 2);
+  }
+  if (/^(4|TRACE)$/i.test(p.verbose || '')) {
+    push('verbose', 'warn', p.verbose, 'TRACE пишет в журнал дампы пакетов — и нагрузка, и утечка. Для работы достаточно INFO/WARNINGS.', 1, 2);
+  }
+  if (obf.unknown.length) {
+    push('Неизвестные ключи', 'fail', obf.unknown.join(', '),
+      'Не из wg-obfuscator ClusterM v1.6 и не из Phobos — опечатка? На неизвестном ключе обфускатор завершается при запуске («Unknown configuration key»).', 0, 2);
+  }
+  if (obf.extraInstances.length) {
+    push('Экземпляры', 'info', [obf.name, ...obf.extraInstances].join(', '),
+      'В файле несколько экземпляров обфускатора — разобран первый (' + esc(obf.name) + ').', 0, 0);
+  }
+
+  // ── Связка с WireGuard ──
+  if (hasWg) {
+    const wcat = 'WireGuard за обфускатором';
+    const wpush = (title, status, value, detail, pts, max) =>
+      R.push({ cat: wcat, title, status, value: String(value), detail, pts, max });
+    const marks = awgMarks(iface);
+    wpush('Протокол под обфускатором', marks.length ? 'fail' : 'pass', marks.length ? 'AWG: ' + marks.join(', ') : 'чистый WireGuard',
+      marks.length
+        ? 'wg-obfuscator распознаёт пакеты по стандартному типу WireGuard (первые 4 байта = 1…4). У AmneziaWG заголовки подменены (H1-H4), а на 3.x зашифрованы, плюс junk/CPS-пакеты — обфускатор принимает их за «уже обфусцированные» и ломает. Под обфускатором нужен обычный WireGuard (или AWG без Jc/S/H/I).'
+        : 'Обычный WireGuard — ровно то, что понимает обфускатор ✓ Сигнатуру WireGuard на проводе прячет сам обфускатор.',
+      marks.length ? 0 : 10, 10);
+
+    const ep = getStr(peer, 'endpoint');
+    const epHost = ep.replace(/:\d+$/, '').replace(/^\[|\]$/g, '');
+    const epPort = +(ep.match(/:(\d+)$/) || [])[1] || null;
+    const epLocal = /^(127\.|localhost$)/i.test(epHost);
+    if (obf.fromInstance) {
+      wpush('Endpoint', 'info', ep || '(нет)',
+        'В формате Phobos Endpoint не используется: клиент (Phobos, AWG Manager) направляет WireGuard в свой локальный релей сам.', 0, 0);
+    } else if (client) {
+      const lport = +p['source-lport'] || null;
+      const match = epLocal && lport && epPort === lport;
+      wpush('Endpoint → обфускатор', match ? 'pass' : 'fail', ep || '(нет)',
+        match ? `WireGuard ходит в локальный обфускатор (127.0.0.1:${lport}) ✓` :
+        !epLocal ? 'Endpoint указывает не на локальный обфускатор — WireGuard пойдёт мимо него, трафик будет голым WireGuard.' :
+        `Порт ${epPort} не совпадает с source-lport = ${lport} обфускатора — пакеты уйдут в никуда.`,
+        match ? 6 : 0, 6);
+    }
+
+    // AllowedIPs и петля маршрутизации
+    const allowed = getStr(peer, 'allowedips');
+    const srvIp = /^\d{1,3}(\.\d{1,3}){3}$/.test(obf.tHost) && obf.side !== 'сервер' ? obf.tHost : null;
+    if (allowed && srvIp) {
+      const cov = coverage4(allowed, srvIp);
+      const full = cov.total === 2 ** 32, fullButOne = cov.total === 2 ** 32 - 1 && !cov.covers;
+      const fwmark = hasKey(iface, 'fwmark') && p.fwmark;
+      wpush('AllowedIPs и IP сервера', fullButOne ? 'pass' : full && !fwmark && !obf.fromInstance ? 'warn' : cov.covers && !full ? 'warn' : 'pass',
+        `${cov.count} подсетей`,
+        fullButOne ? `Весь IPv4, кроме ${srvIp} (сервер) — пакеты обфускатора идут мимо туннеля, петли нет ✓ Работает на любой платформе.` :
+        full && fwmark ? 'Полный туннель, петлю разрывает FwMark (WireGuard и обфускатор с одной меткой) ✓ Только Linux.' :
+        full && obf.fromInstance ? 'Полный туннель: маршрут до сервера мимо туннеля ставит сам клиент Phobos / AWG Manager ✓' :
+        full ? `0.0.0.0/0 без исключения ${srvIp}: пакеты обфускатора к серверу уйдут в сам туннель — петля, связь рвётся сразу после рукопожатия. Исключи IP сервера из AllowedIPs или поставь одинаковый FwMark WireGuard и обфускатору (Linux). Роутеры Keenetic с AWG Manager маршрут до сервера ставят сами.` :
+        cov.covers ? `Сервер ${srvIp} попадает в AllowedIPs — петля для пакетов обфускатора.` :
+        'Раздельное туннелирование, сервер вне туннеля ✓',
+        fullButOne || (full && (fwmark || obf.fromInstance)) ? 6 : 2, 6);
+    }
+
+    // MTU: STUN-обёртка съедает 24 байта
+    const mtu = getInt(iface, 'mtu', null);
+    const wrap = masking === 'STUN' || masking === 'MEDIA' || (masking === 'AUTO' && !client) ? 24 : 0;
+    if (mtu !== null) {
+      const outer = mtu + 60 + wrap;
+      const safe = Math.floor((1500 - 60 - wrap) / 10) * 10;
+      wpush('MTU с обёрткой', outer <= 1500 ? 'pass' : 'warn', `внешний пакет до ${outer} Б`,
+        `${mtu} + 32 (WG) + 28 (IP/UDP)${wrap ? ' + 24 (STUN)' : ''} = ${outer} Б` +
+        (outer <= 1500 ? ' — в 1500 укладывается ✓' : `. Крупные пакеты будут резаться — снизь MTU до ${safe} (у awg2-toolza по умолчанию 1380).`),
+        outer <= 1500 ? 4 : 1, 4);
+    }
+  }
+  return R;
+}
+
+// Дополнительные проверки WireGuard, общие для любого конфига.
+function runWgExtraChecks(iface, peer, peers, source, extra, obfPresent) {
+  const R = [];
+  const push = (title, status, value, detail, pts, max, note) =>
+    R.push({ cat: 'WireGuard', title, status, value: String(value), detail, pts, max, note });
+  const epL = getStr(peer, 'endpoint');
+  if (!obfPresent && /^(127\.|localhost:|\[::1\])/i.test(epL)) {
+    push('Endpoint на localhost', 'info', epL,
+      'WireGuard ходит в локальный релей — обычно это wg-obfuscator (ClusterM / Phobos), udp2raw или wstunnel. Сам конфиг WireGuard про обфускацию ничего не говорит: вставь вместе с ним конфиг обфускатора (obfuscator.conf или секцию [instance]) — проверю связку целиком.', 0, 0);
+  }
+  const hooks = ['preup', 'postup', 'predown', 'postdown'].filter(k => iface[k]);
+  if (hooks.length) {
+    push('PreUp / PostUp', 'info', hooks.map(h => ({ preup: 'PreUp', postup: 'PostUp', predown: 'PreDown', postdown: 'PostDown' })[h]).join(', '),
+      'В конфиге есть команды оболочки — wg-quick выполнит их <strong>от root</strong> при подключении.', 0, 0,
+      '<strong>PreUp / PostUp</strong> — wg-quick выполняет эти команды от root при подключении. Конфиг из чужих рук перед импортом стоит просмотреть: что именно там запускается.');
+  }
+  if (iface.saveconfig && /^true$/i.test(iface.saveconfig)) {
+    push('SaveConfig', 'info', 'true', 'wg-quick перезапишет файл при остановке — ручные правки, сделанные на ходу, пропадут.', 0, 0);
+  }
+  if (iface.table && /^off$/i.test(iface.table)) {
+    push('Table', 'info', 'off', 'Маршруты по AllowedIPs не ставятся — трафик в туннель надо заворачивать самому.', 0, 0);
+  }
+  const lp = getInt(iface, 'listenport', null);
+  if (lp !== null && !iface.address?.includes('/24')) {
+    push('ListenPort у клиента', 'info', lp, 'Фиксированный исходящий порт клиента — лишняя постоянная метка соединения. Клиенту порт обычно не нужен.', 0, 0);
+  }
+  if (peers > 1) {
+    push('Пиров', 'info', peers, 'В конфиге несколько [Peer] — разобран первый.', 0, 0);
+  }
+  const ep = getStr(peer, 'endpoint');
+  if (/(engage\.cloudflareclient\.com|^162\.159\.19[23]\.|^\[?2606:4700:d[01]::)/i.test(ep) ||
+      /^172\.16\.0\.2\/32/.test(iface.address || '')) {
+    push('Cloudflare WARP', 'info', ep || iface.address,
+      'Конфиг WARP (wgcf / warp-plus). Это обычный WireGuard к Cloudflare: сигнатура WireGuard открыта, для обхода блокировок WARP обычно заворачивают в AWG (Jc/S/H) или используют MASQUE.', 0, 0);
+  }
+  if (extra && extra.reserved) {
+    push('reserved', 'info', extra.reserved, 'Байты reserved из ссылки (идентификатор клиента WARP) — в .conf WireGuard их не передать, нужен клиент, который их понимает (sing-box, Xray).', 0, 0);
+  }
+  return R;
+}
+
+// ── Режим «WireGuard за обфускатором»: баннер, риск, сводка, советы ──
+function obfMasking(obf) { return (obf.params.masking || 'AUTO').toUpperCase(); }
+
+function obfVersionInfo(obf, iface, hasWg) {
+  const marks = hasWg ? awgMarks(iface) : [];
+  const m = obfMasking(obf);
+  const server = obf.side === 'сервер';
+  const flavorTxt = obf.flavor === 'Phobos' ? 'Phobos (форк wg-obfuscator)' :
+    obf.flavor === 'ClusterM' ? 'wg-obfuscator ClusterM' : 'wg-obfuscator (ключи обоих форков)';
+  const maskTxt = { STUN: 'маскировка STUN', MEDIA: 'маскировка MEDIA (STUN → RTP)', NONE: 'без маскировки, только XOR',
+    AUTO: server ? 'маскировка по выбору клиента (AUTO)' : 'без маскировки (AUTO на клиенте)', TLS: 'TLS (только SOCKS5)' }[m] || m;
+  const under = !hasWg ? 'конфиг только обфускатора' : marks.length ? 'поверх AmneziaWG — так не работает' : 'поверх обычного WireGuard';
+  return {
+    ver: obf.flavor === 'Phobos' ? 'WG + Phobos' : 'WG + ClusterM', cls: 'ver-obf',
+    desc: `${flavorTxt}: ${server ? 'сервер' : obf.side === 'клиент' ? 'клиент' : 'сторона не определена'}, ${under}. ` +
+      'Каждый UDP-пакет WireGuard проходит через обфускатор: XOR ключом и мусор к мелким пакетам' +
+      (m === 'STUN' || m === 'MEDIA' || (m === 'AUTO' && server) ? ', обёртка под STUN' : '') +
+      '. Сигнатуры WireGuard на проводе нет.',
+    obfLevel: maskTxt, protocol: m === 'STUN' || m === 'MEDIA' || (m === 'AUTO' && server) ? 'STUN' : null, toolzaProfile: null,
+    obf: true, masking: m, marks,
+  };
+}
+
+function obfScores(checks, obf, iface, hasWg) {
+  const tp = checks.reduce((a, c) => a + c.pts, 0);
+  const mp = checks.reduce((a, c) => a + c.max, 0) || 1;
+  const m = obfMasking(obf);
+  const server = obf.side === 'сервер';
+  let dpi = m === 'MEDIA' ? 14 : m === 'STUN' ? 18 : m === 'AUTO' && server ? 20 : 38;
+  const key = obf.params.key || '';
+  if (key.length < 16) dpi += 8;
+  if (+obf.params['obfuscate-bytes'] > 0) dpi += 8;
+  if (obf.params['max-dummy'] !== undefined && +obf.params['max-dummy'] === 0) dpi += 4;
+  if (/^(1|true|on|yes)$/i.test(obf.params['allow-clean'] || '')) dpi += 6;
+  if (hasWg && awgMarks(iface).length) dpi = 92;   // связка не работает вовсе
+  dpi = Math.max(3, Math.min(92, dpi));
+  let total = Math.round(tp / mp * 100);
+  // Критическая ошибка = связка не поднимется или пойдёт мимо обфускатора:
+  // тут высокая «средняя» оценка по остальным пунктам только вводит в заблуждение.
+  if (checks.some(c => c.status === 'fail')) total = Math.min(total, 35);
+  return { total, dpi, stealth: Math.round(100 - dpi * 0.82) };
+}
+
+function buildObfSummary(obf, iface, peer, version, hasWg) {
+  const p = obf.params, parts = [];
+  const pill = t => `<span class="pill">${esc(t)}</span>`;
+  const side = obf.side === 'сервер' ? 'сервер' : obf.side === 'клиент' ? 'клиент' : 'сторона?';
+  parts.push(`<strong>${obf.flavor === 'Phobos' ? 'Phobos' : 'ClusterM'}</strong> · ${side} · ${pill(version.obfLevel)}` +
+    (obf.fromInstance ? ` · ${pill('[instance]')}` : ''));
+  if (obf.side === 'сервер') parts.push(`${pill(':' + (p['source-lport'] || '?'))} → WireGuard ${pill(obf.target)}`);
+  else parts.push(obf.fromInstance ? `→ ${pill(obf.target || '?')}`
+    : `${pill((p['source-if'] || '0.0.0.0') + ':' + (p['source-lport'] || '?'))} → ${pill(obf.target || '?')}`);
+  if (!hasWg) parts.push('Только обфускатор — вставь с ним wg.conf, проверю связку.');
+  else if (version.marks.length) parts.push(`⚠️ Под обфускатором AWG (${esc(version.marks.join(', '))}) — не заработает, нужен обычный WireGuard.`);
+  parts.push('📌 Phobos и ClusterM совместимы без obfuscate-bytes и MEDIA.');
+  return parts.map(x => `<div class="summary-line">${x}</div>`).join('');
+}
+
+function buildObfFixes(checks) {
+  const fixes = [];
+  checks.forEach(c => {
+    if (c.status !== 'fail' && c.status !== 'warn') return;   // info с note — в «Напоминания»
+    const sev = c.status === 'fail' ? 'crit' : c.max >= 10 ? 'high' : c.max >= 5 ? 'med' : 'low';
+    fixes.push({ severity: sev, text: `<strong>${esc(c.title)}</strong>: ${c.detail}` });
+  });
+  return fixes;
+}
+
+function buildObfUpgrade(obf, iface, peer, version, hasWg) {
+  const steps = [], p = obf.params, m = obfMasking(obf), client = obf.side !== 'сервер';
+  const key = p.key || '';
+  if (client && (m === 'NONE' || m === 'AUTO')) {
+    steps.push({ title: `Шаг ${steps.length + 1}: Включи маскировку STUN`,
+      text: 'Без маскировки трафик — «случайный UDP», который режут белые списки протоколов. STUN выглядит как видеозвонок (WebRTC ICE). Сервер в режиме AUTO подхватит сам, менять на нём ничего не нужно.',
+      cmd: (obf.fromInstance ? '# в секции [instance]:\n' : '# в конфиге обфускатора клиента:\n') + 'masking = STUN' });
+  }
+  if (key.length < 16 || /^(test|key|password|secret)$/i.test(key)) {
+    steps.push({ title: `Шаг ${steps.length + 1}: Замени ключ`,
+      text: 'Ключ общий для сервера и всех клиентов — менять одновременно везде. В awg2-toolza: пункт 9 → Настройки → Сменить ключ (комплекты клиентов перевыпускаются сами).',
+      cmd: '# случайный ключ из 32 символов:\ntr -dc A-Za-z0-9 </dev/urandom | head -c 32; echo' });
+  }
+  if (+p['obfuscate-bytes'] > 0 || m === 'MEDIA') {
+    steps.push({ title: `Шаг ${steps.length + 1}: Убери расширения Phobos, если сервер — ClusterM`,
+      text: 'obfuscate-bytes и MEDIA понимает только сервер Phobos. С оригинальным wg-obfuscator (awg2-toolza, AWG Manager «ClusterM») связи не будет.',
+      cmd: '# в [instance] / вкладке «Обфускатор» AWG Manager:\nobfuscate-bytes = 0\nmasking = STUN' });
+  }
+  if (hasWg && version.marks.length) {
+    steps.push({ title: `Шаг ${steps.length + 1}: Под обфускатор — обычный WireGuard`,
+      text: 'Убери из [Interface] параметры AmneziaWG (Jc/Jmin/Jmax, S1-S4, H1-H4 кроме 1/2/3/4, I1-I5, HeaderProtectionKey и прочие 3.x) и на сервере, и на клиенте — либо используй AWG без обфускатора. Вместе они не работают.' });
+  }
+  const allowed = getStr(peer, 'allowedips');
+  if (hasWg && client && !obf.fromInstance && allowed.includes('0.0.0.0/0') && !(iface.fwmark && p.fwmark)) {
+    steps.push({ title: `Шаг ${steps.length + 1}: Разорви петлю маршрутизации`,
+      text: 'Вместо 0.0.0.0/0 пропиши «весь интернет, кроме IP сервера» (awg2-toolza выдаёт такой список сам), либо на Linux — одинаковый FwMark у WireGuard и обфускатора.',
+      cmd: '# Linux, вариант с меткой:\n# [Interface] в wg.conf:\nFwMark = 0xdead\n# конфиг обфускатора:\nfwmark = 0xdead' });
+  }
+  steps.push({ title: steps.length ? `Шаг ${steps.length + 1}: Готовый сервер` : 'Готовый сервер и клиенты',
+    text: 'awg2-toolza (пункт 9) ставит WG + обфускатор рядом с AWG и выдаёт клиенту всё сразу: ссылку phobos://, keenetic.txt для AWG Manager, wg.conf + obfuscator.conf, установщик для Linux. Keenetic: AWG Manager → Новый туннель → вкладка «Phobos» (ссылка) или «ClusterM» (поля).',
+    cmd: 'sudo awg2\n# 9 → WG + обфускатор' });
+  return steps;
+}
+
+// ═══════════════════════════════════════════════════════════
 //  MAIN
 // ═══════════════════════════════════════════════════════════
-function analyze() {
+async function analyze() {
   const raw = document.getElementById('configInput').value.trim();
   const errEl = document.getElementById('errorMsg');
   const scoreEl = document.getElementById('scoreSection');
@@ -1793,6 +2312,7 @@ function analyze() {
 
   // Reset
   errEl.style.display = 'none';
+  document.getElementById('notesBox').style.display = 'none';
   scoreEl.style.display = 'none';
   parsedEl.style.display = 'none';
   checksEl.innerHTML = '';
@@ -1810,21 +2330,45 @@ function analyze() {
     return;
   }
 
-  let parsed;
-  try { parsed = parseAWG(raw); }
+  let parsed, input;
+  try {
+    input = await normalizeInput(raw);
+    parsed = parseAWG(input.text);
+  }
   catch (e) { errEl.textContent = e.message; errEl.style.display = 'block'; return; }
 
-  const { iface, peer } = parsed;
-  const version = detectVersion(iface);
-  const checks = runChecks(iface, peer, version);
-  const scores = calcScores(checks, iface, version);
-  const fixes = buildFixes(checks, iface, peer, version);
-  const upgrades = buildUpgradePath(iface, version);
+  const { iface, peer, hasWg } = parsed;
+  const obf = buildObf(parsed.sections);
+  let version, checks, scores, fixes, upgrades;
+  if (obf) {
+    // WireGuard за обфускатором: проверки Jc/S/H/I здесь не к месту (их и быть
+    // не должно), AllowedIPs/MTU/Endpoint считаются с учётом обфускатора.
+    version = obfVersionInfo(obf, iface, hasWg);
+    const awgCats = ['Junk-пакеты', 'Handshake Padding (S1/S2)', 'Handshake Padding (S3/S4)', 'Magic Headers (H1-H4)', 'CPS Мимикрия (I1-I5)'];
+    const base = hasWg ? runChecks(iface, peer, detectVersion(iface)).filter(c =>
+      !awgCats.includes(c.cat) && c.cat !== 'Сервер' && !(c.cat === 'Маршрутизация' && c.title === 'AllowedIPs') &&
+      !(c.cat === 'Сеть' && /^(MTU|Запас)/.test(c.title)) &&
+      // PrivateKey в формате Phobos с панели бывает скрыт — не штрафуем за это саму обфускацию
+      !(c.cat === 'Ключи' && c.title === 'PrivateKey' && !getStr(iface, 'privatekey'))) : [];
+    checks = [...runObfChecks(obf, iface, peer, hasWg), ...base,
+      ...(hasWg ? runWgExtraChecks(iface, peer, parsed.peers, input.source, input, true) : [])];
+    scores = obfScores(checks, obf, iface, hasWg);
+    fixes = buildObfFixes(checks);
+    upgrades = buildObfUpgrade(obf, iface, peer, version, hasWg);
+  } else {
+    version = detectVersion(iface);
+    checks = [...runChecks(iface, peer, version),
+      ...runWgExtraChecks(iface, peer, parsed.peers, input.source, input, false)];
+    scores = calcScores(checks, iface, version);
+    fixes = buildFixes(checks, iface, peer, version);
+    upgrades = buildUpgradePath(iface, version);
+  }
 
   // Camouflage
   let camouflage = 'LOW';
   if (version.protocol === 'QUIC' || version.protocol === 'TLS') camouflage = 'HIGH';
-  else if (version.protocol === 'DTLS' || version.protocol === 'SIP' || version.protocol === 'DNS') camouflage = 'MEDIUM';
+  else if (version.protocol === 'DTLS' || version.protocol === 'SIP' || version.protocol === 'DNS' || version.protocol === 'STUN') camouflage = 'MEDIUM';
+  if (obf && version.masking === 'MEDIA') camouflage = 'HIGH';
 
   const verdict = getVerdict(scores.total, version.ver);
   const dpiL = dpiLabel(scores.dpi);
@@ -1833,7 +2377,7 @@ function analyze() {
   verBanner.style.display = 'flex';
   verBadge.textContent = version.ver;
   verBadge.className = 'ver-badge ' + version.cls;
-  let descHtml = esc(version.desc);
+  let descHtml = (input.sourceNote ? `<span class="ver-level">${esc(input.sourceNote)}</span> ` : '') + esc(version.desc);
   if (version.obfLevel) {
     descHtml += ` <span class="ver-level">${esc(version.obfLevel)}</span>`;
   }
@@ -1841,7 +2385,7 @@ function analyze() {
 
   // Summary
   summaryEl.style.display = 'block';
-  summaryText.innerHTML = buildSummary(iface, peer, version);
+  summaryText.innerHTML = obf ? buildObfSummary(obf, iface, peer, version, hasWg) : buildSummary(iface, peer, version);
 
   // Score ring
   scoreEl.style.display = 'block';
@@ -1860,12 +2404,20 @@ function analyze() {
     ? renderMini(version.toolzaProfile.name === 'AmneziaVPN' ? 'Source' : 'Toolza Profile', version.toolzaProfile.name, profileColor(version.toolzaProfile.name))
     : '';
   miniEl.innerHTML =
-    renderMini('AWG Version', version.ver, '#a78bfa') +
+    renderMini(obf ? 'Протокол' : 'AWG Version', version.ver, '#a78bfa') +
     renderMini('DPI Risk', dpiL.t, dpiL.c) +
     renderMini('Stealth', scores.stealth, '#818cf8', '%') +
     renderMini('Security', scores.total, '#e2e8f0', '%') +
     renderMini('Camouflage', camouflage, '#60a5fa') +
     profileTile;
+
+  // Напоминания отдельно: это не поломки, в «срочно исправить» им не место
+  checks.forEach(c => { if (c.note) fixes.push({ severity: 'note', text: c.note }); });
+  const notes = fixes.filter(f => f.severity === 'note');
+  fixes = fixes.filter(f => f.severity !== 'note');
+  const notesEl = document.getElementById('notesBox');
+  notesEl.style.display = notes.length ? 'block' : 'none';
+  document.getElementById('notesList').innerHTML = notes.map(n => `<div class="note-item">${n.text}</div>`).join('');
 
   // Fixes — сортируем по severity
   if (fixes.length) {
@@ -1911,7 +2463,16 @@ function analyze() {
     ['publickey', peer.publickey ? peer.publickey.slice(0, 16) + '…' : '—'],
     ['allowedips', peer.allowedips || '—'],
     ['keepalive', peer.persistentkeepalive || '—'],
-  ].filter(([, v]) => v && v !== '—');
+  ].concat(obf ? [
+    ['obfuscator', obf.flavor + ' · ' + (obf.fromInstance ? '[instance]' : '[' + obf.name + ']') + ' · ' + obf.side],
+    ['obf target', obf.params.target || '—'],
+    ['obf key', obf.params.key ? obf.params.key.slice(0, 6) + '… (' + obf.params.key.length + ')' : '—'],
+    ['obf masking', obf.params.masking || 'AUTO'],
+    ['obf source', obf.params['source-lport'] ? (obf.params['source-if'] || '0.0.0.0') + ':' + obf.params['source-lport'] : '—'],
+    ['obf max-dummy', obf.params['max-dummy'] || '—'],
+    ['obf-bytes', obf.params['obfuscate-bytes'] || '—'],
+    ['allow-clean', obf.params['allow-clean'] || '—'],
+  ] : []).filter(([, v]) => v && v !== '—');
   parsedEl.innerHTML = prows.map(([k, v]) => `<span>${k.padEnd(20)}</span>= ${esc(v)}`).join('\n');
 
   // Checks
@@ -1943,7 +2504,7 @@ function loadFile(e) {
 }
 function clearAll() {
   document.getElementById('configInput').value = '';
-  ['errorMsg', 'scoreSection', 'parsedParams', 'autofixBox', 'versionBanner', 'summaryBox', 'upgradeBox'].forEach(id => {
+  ['errorMsg', 'scoreSection', 'parsedParams', 'autofixBox', 'notesBox', 'versionBanner', 'summaryBox', 'upgradeBox'].forEach(id => {
     document.getElementById(id).style.display = 'none';
   });
   document.getElementById('checksOutput').innerHTML = '';
